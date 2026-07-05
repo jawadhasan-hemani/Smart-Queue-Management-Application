@@ -1,0 +1,15 @@
+{
+  "name": "queuesmart",
+  "version": "1.0.0",
+  "description": "Full-stack Queue Management Application Skeleton",
+  "main": "backend/index.js",
+  "scripts": {
+    "install-all": "npm install && npm install --prefix frontend && npm install --prefix backend",
+    "backend": "npm run dev --prefix backend",
+    "frontend": "npm start --prefix frontend",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
