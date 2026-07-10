@@ -4,6 +4,7 @@ import React, {
   useContext,
   useMemo,
   useState,
+  useEffect,
 } from "react"
 
 import { mockServices, mockQueues, mockHistory, mockNotifications } from "../mockData"
@@ -21,12 +22,60 @@ export function useApp() {
   return ctx
 }
 
+function useSharedState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch {
+      return initialValue
+    }
+  })
+
+  useEffect(() => {
+    function handleStorageChange(e) {
+      if (e.key === key && e.newValue) {
+        setState(JSON.parse(e.newValue))
+      }
+    }
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [key])
+
+  const setSharedState = useCallback((value) => {
+    setState((prev) => {
+      const nextValue = typeof value === "function" ? value(prev) : value
+      window.localStorage.setItem(key, JSON.stringify(nextValue))
+      return nextValue
+    })
+  }, [key])
+
+  return [state, setSharedState]
+}
+
 export function AppProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [services, setServices] = useState(mockServices)
-  const [queues, setQueues] = useState(mockQueues)
-  const [history] = useState(mockHistory)
-  const [notifications, setNotifications] = useState(mockNotifications)
+  const [user, setUserState] = useState(() => {
+    try {
+      const u = window.sessionStorage.getItem("qs_user")
+      return u ? JSON.parse(u) : null
+    } catch {
+      return null
+    }
+  })
+
+  const setUser = useCallback((val) => {
+    setUserState((prev) => {
+      const next = typeof val === "function" ? val(prev) : val
+      if (next) window.sessionStorage.setItem("qs_user", JSON.stringify(next))
+      else window.sessionStorage.removeItem("qs_user")
+      return next
+    })
+  }, [])
+
+  const [services, setServices] = useSharedState("qs_services", mockServices)
+  const [queues, setQueues] = useSharedState("qs_queues", mockQueues)
+  const [history, setHistory] = useSharedState("qs_history", mockHistory)
+  const [notifications, setNotifications] = useSharedState("qs_notifications", mockNotifications)
 
   const pushNotification = useCallback(
     (n) => {
