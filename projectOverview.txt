@@ -1,0 +1,66 @@
+Problem Statement Many organizations (student service centers, clinics, advising offices, help desks) struggle with long queues and poor visibility into wait times. Users often do not know how long they will wait, and staff have limited tools to manage demand efficiently.
+Your team will design QueueSmart, a web or mobile application that helps:
+Users Join a queue or book an appointment
+View their position and estimated wait time
+Receive notifications when their turn is approaching
+Administrators Create and manage services
+Monitor queues and priorities
+Improve overall service efficiency
+Required Screens / Features
+
+1. Authentication Screens
+Login screen
+Registration screen
+Email (used as username)
+Password
+Basic client-side validation
+
+2. User Screens
+User Dashboard
+Overview of current queue status
+Active services available
+Notifications summary
+Join Queue Screen
+Select a service
+View estimated wait time
+Join or leave a queue
+Queue Status Screen
+Current position in queue
+Estimated wait time
+Status updates (waiting, almost ready, served)
+History Screen
+List of past queues joined
+Date, service name, and outcome
+
+3. Administrator Screens
+Admin Dashboard
+List of services
+Current queue lengths
+Quick actions (open/close queue)
+Service Management Screen
+Admins can:
+Create or edit services
+Fields include:
+Service Name (required, max 100 characters)
+Description (required)
+Expected Duration (minutes, required)
+Priority Level (low / medium / high)
+Queue Management Screen
+View queue for a selected service
+Reorder or remove users (UI only)
+Serve next user (UI simulation)
+
+4. Notifications
+Display notifications in the UI for:
+Queue updates
+Status changes
+Notifications may be in-app only for this assignment
+
+5. UI Validations (Required)
+You must include client-side validations such as:
+Required fields
+Field length limits
+Proper input types (email, numbers, dates)
+
+
+We are choosing student advising offices.
