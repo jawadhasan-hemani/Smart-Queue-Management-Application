@@ -16,24 +16,48 @@ export default function Landing() {
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState({});
 
+  const NAME_MAX = 100;
+  const EMAIL_MAX = 254;
+  const PASSWORD_MIN = 8;
+  const PASSWORD_MAX = 64;
+
   function validate() {
     const e = {};
-    if (mode === 'register' && name.trim().length < 2) {
-      e.name = 'Please enter your full name.';
+
+    if (mode === 'register') {
+      if (!name.trim()) {
+        e.name = 'Full name is required.';
+      } else if (name.trim().length < 2) {
+        e.name = 'Please enter your full name.';
+      } else if (name.trim().length > NAME_MAX) {
+        e.name = `Name must be ${NAME_MAX} characters or fewer.`;
+      }
     }
+
     if (!email.trim()) {
       e.email = 'Email is required.';
+    } else if (email.trim().length > EMAIL_MAX) {
+      e.email = `Email must be ${EMAIL_MAX} characters or fewer.`;
     } else if (!emailRe.test(email)) {
       e.email = 'Enter a valid email address.';
     }
+
     if (!password) {
       e.password = 'Password is required.';
-    } else if (password.length < 6) {
-      e.password = 'Password must be at least 6 characters.';
+    } else if (password.length < PASSWORD_MIN) {
+      e.password = `Password must be at least ${PASSWORD_MIN} characters.`;
+    } else if (password.length > PASSWORD_MAX) {
+      e.password = `Password must be ${PASSWORD_MAX} characters or fewer.`;
     }
-    if (mode === 'register' && confirm !== password) {
-      e.confirm = 'Passwords do not match.';
+
+    if (mode === 'register') {
+      if (!confirm) {
+        e.confirm = 'Please confirm your password.';
+      } else if (confirm !== password) {
+        e.confirm = 'Passwords do not match.';
+      }
     }
+
     return e;
   }
 
@@ -58,20 +82,24 @@ export default function Landing() {
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-background lg:flex-row text-foreground font-sans">
-      {/* Brand panel */}
-      <section className="relative flex flex-col justify-between overflow-hidden bg-card border-b lg:border-b-0 lg:border-r border-border px-8 py-10 lg:w-[46%] lg:px-14 lg:py-14">
+      {/* Brand panel — styled to match the AppShell sidebar */}
+      <section className="relative flex flex-col justify-between overflow-hidden bg-sidebar border-b lg:border-b-0 lg:border-r border-sidebar-border px-8 py-10 text-sidebar-foreground lg:w-2/5 lg:px-14 lg:py-14">
         {/* Top bar with logo */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-light.png" alt="QueueSmart" className="h-9 w-9 object-contain rounded-[8px]" />
-            <span className="text-lg font-extrabold tracking-tighter text-foreground">QueueSmart</span>
+            <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+            </span>
+            <span className="text-lg font-extrabold tracking-tighter">QueueSmart</span>
           </div>
         </div>
 
         {/* Central Brand statement */}
         <div className="my-12 max-w-md lg:my-auto">
-          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-bold text-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-primary">
+          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-sidebar-accent px-3 py-1 text-xs font-bold text-sidebar-accent-foreground">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-sidebar-primary">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.9c2.79 0 5.437-.724 7.731-2.006a60.48 60.48 0 0 0-.491-6.347m-15.482 0a48.69 48.69 0 0 1 2.247-5.277m0 0a48.97 48.97 0 0 1 10.97 0m-10.97 0a49.144 49.144 0 0 1 2.247 5.277m10.97-5.277a48.967 48.967 0 0 1 2.247 5.277m0 0a48.967 48.967 0 0 1-2.247 5.277m0 0A48.624 48.624 0 0 1 12 16.5c-1.353 0-2.67-.1-3.957-.293m0 0a48.624 48.624 0 0 1-3.782-3.65m5.466 5.96a48.118 48.118 0 0 0 4.545 0m-4.545 0a48.624 48.624 0 0 1-3.782-3.65m8.327 3.65a48.624 48.624 0 0 0 3.782-3.65m-7.316-6.103a48.243 48.243 0 0 0-3.327 0m0 0a48.243 48.243 0 0 0 0 6.654m0-6.654a48.337 48.337 0 0 1 3.327 0m0 0a48.337 48.337 0 0 1 0 6.654m-3.327-6.654C8.75 6.75 10.33 6 12 6c1.67 0 3.25.75 4.316 2.054m-8.632 0A48.967 48.967 0 0 1 12 9.5a48.967 48.967 0 0 1 4.316-1.446" />
             </svg>
             Student Advising Offices
@@ -79,7 +107,7 @@ export default function Landing() {
           <h1 className="text-3xl font-extrabold leading-tight tracking-tight lg:text-4xl">
             Skip the line. Know your wait. Get advised.
           </h1>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-4 text-sm leading-relaxed text-sidebar-foreground/70">
             Join advising queues remotely, watch your position update live, and get notified the
             moment your turn is near.
           </p>
@@ -91,7 +119,7 @@ export default function Landing() {
               { text: "Staff tools to manage demand and priorities" },
             ].map(({ text }, idx) => (
               <li key={text} className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-muted text-primary">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-primary">
                   {idx === 0 && (
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -108,19 +136,19 @@ export default function Landing() {
                     </svg>
                   )}
                 </span>
-                <span className="text-foreground">{text}</span>
+                <span className="text-sidebar-foreground">{text}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="hidden text-xs text-muted-foreground lg:block">
+        <p className="hidden text-xs text-sidebar-foreground/60 lg:block">
           &copy; 2026 QueueSmart · University Advising Services
         </p>
       </section>
 
       {/* Form panel */}
-      <section className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10">
+      <section className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10 lg:w-3/5">
         <div className="w-full max-w-md space-y-6">
           <div>
             <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
@@ -171,6 +199,7 @@ export default function Landing() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Jordan Alvarez"
+                  maxLength={NAME_MAX}
                   className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                 />
                 {errors.name && <p className="text-[11px] text-destructive font-medium">{errors.name}</p>}
@@ -185,6 +214,7 @@ export default function Landing() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@university.edu"
+                maxLength={EMAIL_MAX}
                 className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
               />
               {errors.email && <p className="text-[11px] text-destructive font-medium">{errors.email}</p>}
@@ -197,7 +227,8 @@ export default function Landing() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
+                maxLength={PASSWORD_MAX}
                 className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
               />
               {errors.password && <p className="text-[11px] text-destructive font-medium">{errors.password}</p>}
@@ -212,6 +243,7 @@ export default function Landing() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Re-enter password"
+                  maxLength={PASSWORD_MAX}
                   className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                 />
                 {errors.confirm && <p className="text-[11px] text-destructive font-medium">{errors.confirm}</p>}
