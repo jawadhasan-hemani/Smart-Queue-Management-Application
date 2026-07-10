@@ -11,6 +11,9 @@ function Admin() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] px-4">
       <div className="max-w-md w-full p-8 bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-100 text-center">
+        <div className="flex justify-center mb-6">
+          <img src="/logo-light.png" alt="QueueSmart Logo" className="w-24 h-24 object-contain rounded-2xl" />
+        </div>
         <h2 className="text-3xl font-bold text-slate-900 mb-4">
           Admin Page
         </h2>
