@@ -77,12 +77,57 @@ export function AppProvider({ children }) {
   const [history, setHistory] = useSharedState("qs_history", mockHistory)
   const [notifications, setNotifications] = useSharedState("qs_notifications", mockNotifications)
 
+  // Per-device notification preferences (not shared across tabs/users on purpose)
+  const [muteToasts, setMuteToastsState] = useState(() => {
+    try {
+      return window.localStorage.getItem("qs_mute_toasts") === "true"
+    } catch {
+      return false
+    }
+  })
+
+  const setMuteToasts = useCallback((val) => {
+    setMuteToastsState((prev) => {
+      const next = typeof val === "function" ? val(prev) : val
+      try {
+        window.localStorage.setItem("qs_mute_toasts", String(next))
+      } catch {
+        // ignore storage errors (e.g. private browsing)
+      }
+      return next
+    })
+  }, [])
+
+  const [pushPermission, setPushPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+  )
+
+  const requestPushPermission = useCallback(async () => {
+    if (typeof Notification === "undefined") return "unsupported"
+    const result = await Notification.requestPermission()
+    setPushPermission(result)
+    return result
+  }, [])
+
   const pushNotification = useCallback(
     (n) => {
       setNotifications((prev) => [
         { ...n, id: nextId("n"), createdAt: Date.now(), read: false },
         ...prev,
       ])
+
+      // Fire a native browser notification when the tab isn't focused and permission is granted
+      try {
+        if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted" &&
+          document.hidden
+        ) {
+          new Notification(n.title, { body: n.body })
+        }
+      } catch {
+        // Notification API can throw in some environments (e.g. insecure context) — ignore
+      }
     },
     [],
   )
@@ -292,6 +337,10 @@ export function AppProvider({ children }) {
       clearNotifications,
       dismissNotification,
       pushNotification,
+      muteToasts,
+      setMuteToasts,
+      pushPermission,
+      requestPushPermission,
     }),
     [
       user,
@@ -316,6 +365,10 @@ export function AppProvider({ children }) {
       clearNotifications,
       dismissNotification,
       pushNotification,
+      muteToasts,
+      setMuteToasts,
+      pushPermission,
+      requestPushPermission,
     ],
   )
 

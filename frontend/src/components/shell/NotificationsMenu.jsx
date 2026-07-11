@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { Bell, CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react"
+import { Bell, BellOff, CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react"
 import { useApp } from "../AppContext"
 import { relativeTime } from "../shared"
 
@@ -11,7 +11,16 @@ const toneIcon = {
 }
 
 export function NotificationsMenu() {
-  const { notifications, markNotificationsRead, clearNotifications, dismissNotification } = useApp()
+  const {
+    notifications,
+    markNotificationsRead,
+    clearNotifications,
+    dismissNotification,
+    muteToasts,
+    setMuteToasts,
+    pushPermission,
+    requestPushPermission,
+  } = useApp()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const unread = notifications.filter((n) => !n.read).length
@@ -64,6 +73,29 @@ export function NotificationsMenu() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => setMuteToasts((m) => !m)}
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {muteToasts ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+              {muteToasts ? "Toasts muted" : "Mute toasts"}
+            </button>
+            {pushPermission !== "granted" && pushPermission !== "unsupported" && (
+              <button
+                type="button"
+                onClick={requestPushPermission}
+                className="text-xs font-medium text-primary transition-colors hover:text-primary/80"
+              >
+                Enable desktop alerts
+              </button>
+            )}
+            {pushPermission === "granted" && (
+              <span className="text-[11px] text-muted-foreground">Desktop alerts on</span>
+            )}
           </div>
           <ul className="max-h-96 divide-y divide-border overflow-y-auto">
             {notifications.length === 0 && (

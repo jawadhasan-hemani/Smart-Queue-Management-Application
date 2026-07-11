@@ -14,8 +14,16 @@ function formatCountdown(totalSeconds) {
   return `${m}:${String(s).padStart(2, "0")}`
 }
 
+function formatEta(totalSeconds) {
+  if (totalSeconds <= 0) return null
+  const eta = new Date(Date.now() + totalSeconds * 1000)
+  return eta.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
+
+const UNDO_WINDOW_MS = 5000
+
 export function QueueStatus({ onNavigate }) {
-  const { myEntry, orderedQueue, leaveQueue, removeEntry, pushNotification } = useApp()
+  const { myEntry, orderedQueue, leaveQueue, joinQueue, removeEntry, pushNotification } = useApp()
   const active = myEntry()
 
   // Keep the latest values in a ref so the interval callback below never closes over stale state
@@ -25,6 +33,40 @@ export function QueueStatus({ onNavigate }) {
   const initialAheadRef = useRef(null)
   const almostNotifiedRef = useRef(false)
   const prevPositionRef = useRef(null)
+
+  // Brief skeleton on first mount so the status screen doesn't feel like a static dump of data
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 500)
+    return () => clearTimeout(t)
+  }, [])
+
+  // "Undo" window after leaving a queue, before we actually navigate away
+  const [pendingLeave, setPendingLeave] = useState(null)
+  const undoTimeoutRef = useRef(null)
+
+  function handleLeave() {
+    if (!active) return
+    const { serviceId, serviceName: leftServiceName } = {
+      serviceId: active.service.id,
+      serviceName: active.service.name,
+    }
+    leaveQueue()
+    setPendingLeave({ serviceId, serviceName: leftServiceName })
+    undoTimeoutRef.current = setTimeout(() => {
+      setPendingLeave(null)
+      onNavigate("dashboard")
+    }, UNDO_WINDOW_MS)
+  }
+
+  function handleUndoLeave() {
+    if (!pendingLeave) return
+    clearTimeout(undoTimeoutRef.current)
+    joinQueue(pendingLeave.serviceId)
+    setPendingLeave(null)
+  }
+
+  useEffect(() => () => clearTimeout(undoTimeoutRef.current), [])
 
   const entryId = active?.entry.id ?? null
   const isWaiting = active ? active.position > 1 : false
@@ -102,6 +144,41 @@ export function QueueStatus({ onNavigate }) {
     return () => clearInterval(timer)
   }, [isWaiting, entryId])
 
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-8 animate-pulse">
+        <div className="overflow-hidden rounded-2xl border-2 border-border">
+          <div className="space-y-4 bg-muted/50 p-8 text-center">
+            <div className="mx-auto h-4 w-24 rounded-full bg-muted" />
+            <div className="mx-auto h-14 w-20 rounded-lg bg-muted" />
+            <div className="mx-auto h-3 w-32 rounded-full bg-muted" />
+          </div>
+          <div className="divide-y divide-border">
+            <div className="h-16 bg-card" />
+            <div className="h-16 bg-card" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (pendingLeave) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-4 text-center">
+        <div className="flex size-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <LogOut className="size-8" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Left the {pendingLeave.serviceName} queue</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Changed your mind? You can still rejoin.</p>
+        </div>
+        <Button variant="outline" onClick={handleUndoLeave} className="mt-2">
+          Undo
+        </Button>
+      </div>
+    )
+  }
+
   if (!active) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-4 text-center">
@@ -174,7 +251,16 @@ export function QueueStatus({ onNavigate }) {
                 <div>
                   <p className="text-sm font-medium">Estimated wait</p>
                   <p className="text-sm text-muted-foreground">
-                    {isFirst ? "You're next" : formatCountdown(secondsLeft)}
+                    {isFirst ? (
+                      "You're next"
+                    ) : (
+                      <>
+                        {formatCountdown(secondsLeft)}
+                        {formatEta(secondsLeft) && (
+                          <span className="text-muted-foreground/70"> · ~{formatEta(secondsLeft)}</span>
+                        )}
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -244,10 +330,7 @@ export function QueueStatus({ onNavigate }) {
         <Button 
           variant="destructive" 
           className="w-full sm:w-auto"
-          onClick={() => {
-            leaveQueue();
-            onNavigate("dashboard");
-          }}
+          onClick={handleLeave}
         >
           <LogOut className="size-4 mr-2" />
           Leave queue
