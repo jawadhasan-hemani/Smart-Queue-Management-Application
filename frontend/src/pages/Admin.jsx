@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Clock, History as HistoryIcon, LayoutDashboard, LogOut, Pencil, PhoneCall, Plus, Search, Settings2, TriangleAlert, Users, X, XCircle} 
+import {ArrowDown,ArrowLeft,ArrowUp,CheckCircle2,ChevronDown,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,X,XCircle,}
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -27,6 +27,22 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function ServiceStateBadge({ open }) {
   return <Badge tone={open ? "success" : "neutral"}>{open ? "Open" : "Closed"}</Badge>
+}
+
+function Select({ id, value, onChange, className = "", children }) {
+  return (
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={onChange}
+        className={`w-full appearance-none rounded-xl border border-border bg-card py-2 pl-3 pr-9 text-sm text-foreground transition-all hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring ${className}`}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  )
 }
 
 function AdminDashboard({ onEditService, onManageQueue }) {
@@ -245,18 +261,13 @@ function ServiceForm({ editing, onSaved, onCancelEdit }) {
               <label className="text-xs font-bold text-foreground" htmlFor="svc-priority">
                 Priority level
               </label>
-              <select
-                id="svc-priority"
-                value={form.priority}
-                onChange={set("priority")}
-                className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm capitalize transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
-              >
+              <Select id="svc-priority" value={form.priority} onChange={set("priority")} className="pl-4 capitalize">
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p} className="capitalize">
                     {p}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -568,36 +579,26 @@ function AdminHistory({ log }) {
               <label className="text-xs font-bold text-foreground" htmlFor="hist-service">
                 Service
               </label>
-              <select
-                id="hist-service"
-                value={serviceFilter}
-                onChange={(e) => setServiceFilter(e.target.value)}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
-              >
+              <Select id="hist-service" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
                 <option value="all">All services</option>
                 {services.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-foreground" htmlFor="hist-outcome">
                 Outcome
               </label>
-              <select
-                id="hist-outcome"
-                value={outcomeFilter}
-                onChange={(e) => setOutcomeFilter(e.target.value)}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
-              >
+              <Select id="hist-outcome" value={outcomeFilter} onChange={(e) => setOutcomeFilter(e.target.value)}>
                 <option value="all">All outcomes</option>
                 <option value="served">Served</option>
                 <option value="left">Left queue</option>
                 <option value="removed">Removed by admin</option>
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1">
@@ -612,7 +613,7 @@ function AdminHistory({ log }) {
                   setPreset("custom")
                   setDateFrom(e.target.value)
                 }}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring [color-scheme:light]"
               />
             </div>
 
@@ -628,7 +629,7 @@ function AdminHistory({ log }) {
                   setPreset("custom")
                   setDateTo(e.target.value)
                 }}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring [color-scheme:light]"
               />
             </div>
           </div>
@@ -716,7 +717,17 @@ function buildSeedLog() {
   ]
   return raw.map((r, i) => {
     const resolvedAt = now - r.daysAgo * DAY_MS - r.hoursAgo * 3600_000
-    return {id: `seed-${i}`, studentName: r.studentName, serviceId: r.serviceId, serviceName: undefined, priority: r.priority, outcome: r.outcome, joinedAt: resolvedAt - r.waitMinutes * 60_000, resolvedAt, waitMinutes: r.waitMinutes}
+    return {
+      id: `seed-${i}`,
+      studentName: r.studentName,
+      serviceId: r.serviceId,
+      serviceName: undefined, 
+      priority: r.priority,
+      outcome: r.outcome,
+      joinedAt: resolvedAt - r.waitMinutes * 60_000,
+      resolvedAt,
+      waitMinutes: r.waitMinutes,
+    }
   })
 }
 
@@ -731,8 +742,6 @@ function Admin() {
   const justResolvedRef = useRef(new Set())
   const prevQueuesRef = useRef(queues)
 
-  // Catch students who leave on their own (from the student portal) so History stays complete
-  // even for activity this admin view didn't directly trigger.
   useEffect(() => {
     const currentIds = new Set(queues.map((q) => q.id))
     const vanished = prevQueuesRef.current.filter((q) => !currentIds.has(q.id))
@@ -782,17 +791,7 @@ function Admin() {
     if (!entry) return
     justResolvedRef.current.add(entry.id)
     setLog((prev) => [
-      {
-        id: `log-${entry.id}-${Date.now()}`,
-        studentName: entry.studentName,
-        serviceId: service.id,
-        serviceName: service.name,
-        priority: entry.priority,
-        outcome,
-        joinedAt: entry.joinedAt,
-        resolvedAt: Date.now(),
-        waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),
-      },
+      {id: `log-${entry.id}-${Date.now()}`, studentName: entry.studentName, serviceId: service.id, serviceName: service.name, priority: entry.priority, outcome, joinedAt: entry.joinedAt, resolvedAt: Date.now(), waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),},
       ...prev,
     ])
   }
