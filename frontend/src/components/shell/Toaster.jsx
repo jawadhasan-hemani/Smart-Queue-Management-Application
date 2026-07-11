@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Info, TriangleAlert, X } from "lucide-react"
+import { CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react"
 import { useApp } from "../AppContext"
 
 const toneStyles = {
@@ -13,6 +13,11 @@ const toneStyles = {
     Icon: TriangleAlert,
     iconCls: "text-[oklch(0.55_0.13_65)]",
     ringCls: "border-[oklch(0.72_0.14_75)]/40",
+  },
+  danger: {
+    Icon: XCircle,
+    iconCls: "text-[oklch(0.55_0.18_25)]",
+    ringCls: "border-[oklch(0.62_0.18_25)]/40",
   },
 }
 

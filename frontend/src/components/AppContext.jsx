@@ -199,9 +199,23 @@ export function AppProvider({ children }) {
     [orderedQueue, pushNotification],
   )
 
-  const removeEntry = useCallback((entryId) => {
-    setQueues((prev) => prev.filter((q) => q.id !== entryId))
-  }, [])
+  const removeEntry = useCallback(
+    (entryId) => {
+      setQueues((prev) => {
+        const removed = prev.find((q) => q.id === entryId)
+        if (removed && user && removed.studentName === user.name) {
+          const svc = services.find((s) => s.id === removed.serviceId)
+          pushNotification({
+            title: "Removed from queue",
+            body: `You were removed from the ${svc?.name ?? "service"} line by staff.`,
+            tone: "danger",
+          })
+        }
+        return prev.filter((q) => q.id !== entryId)
+      })
+    },
+    [user, services, pushNotification],
+  )
 
   const moveEntry = useCallback(
     (entryId, direction) => {
@@ -230,6 +244,14 @@ export function AppProvider({ children }) {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }, [])
 
+  const clearNotifications = useCallback(() => {
+    setNotifications([])
+  }, [])
+
+  const dismissNotification = useCallback((id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
@@ -251,6 +273,8 @@ export function AppProvider({ children }) {
       moveEntry,
       estimatedWait,
       markNotificationsRead,
+      clearNotifications,
+      dismissNotification,
       pushNotification,
     }),
     [
@@ -273,6 +297,8 @@ export function AppProvider({ children }) {
       moveEntry,
       estimatedWait,
       markNotificationsRead,
+      clearNotifications,
+      dismissNotification,
       pushNotification,
     ],
   )

@@ -1,11 +1,18 @@
-import React, { useEffect, useRef } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { BellRing, Clock, MapPin, Search, LogOut } from "lucide-react"
 import { useApp } from "../../components/AppContext"
-import { formatWait, StatusBadge } from "../../components/shared"
+import { StatusBadge } from "../../components/shared"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent } from "../../components/ui/card"
 
 const SIM_TICK_MS = 7000
+
+function formatCountdown(totalSeconds) {
+  if (totalSeconds <= 0) return "Any moment now"
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m}:${String(s).padStart(2, "0")}`
+}
 
 export function QueueStatus({ onNavigate }) {
   const { myEntry, orderedQueue, leaveQueue, removeEntry, pushNotification } = useApp()
@@ -17,16 +24,22 @@ export function QueueStatus({ onNavigate }) {
 
   const initialAheadRef = useRef(null)
   const almostNotifiedRef = useRef(false)
+  const prevPositionRef = useRef(null)
 
   const entryId = active?.entry.id ?? null
   const isWaiting = active ? active.position > 1 : false
   const activePosition = active?.position ?? null
   const serviceName = active?.service.name ?? null
+  const activeWait = active?.wait ?? null
+
+  // Live countdown in seconds, so the wait estimate visibly ticks down instead of sitting static
+  const [secondsLeft, setSecondsLeft] = useState(activeWait !== null ? activeWait * 60 : 0)
 
   // Reset simulation bookkeeping whenever the tracked queue entry changes (join / leave / re-join)
   useEffect(() => {
     initialAheadRef.current = active ? active.position - 1 : null
     almostNotifiedRef.current = false
+    prevPositionRef.current = active ? active.position : null
     // Only re-run when a different queue entry is being tracked, not on every position tick
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryId])
@@ -58,6 +71,37 @@ export function QueueStatus({ onNavigate }) {
     }
   }, [activePosition, serviceName, pushNotification])
 
+  // Let the student know when they've moved up (but skip #1, the "up next" effect already covers that)
+  useEffect(() => {
+    if (
+      prevPositionRef.current !== null &&
+      activePosition !== null &&
+      activePosition < prevPositionRef.current &&
+      activePosition > 1
+    ) {
+      pushNotification({
+        title: "You moved up!",
+        body: `You're now #${activePosition} in line for ${serviceName}.`,
+        tone: "info",
+      })
+    }
+    prevPositionRef.current = activePosition
+  }, [activePosition, serviceName, pushNotification])
+
+  // Reset the live countdown whenever the estimated wait changes (position shift, join, leave)
+  useEffect(() => {
+    setSecondsLeft(activeWait !== null ? activeWait * 60 : 0)
+  }, [activeWait])
+
+  // Tick the countdown down every second while waiting
+  useEffect(() => {
+    if (!isWaiting) return undefined
+    const timer = setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [isWaiting, entryId])
+
   if (!active) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-4 text-center">
@@ -75,7 +119,7 @@ export function QueueStatus({ onNavigate }) {
     )
   }
 
-  const { entry, service, position, wait, status } = active
+  const { entry, service, position, status } = active
   const isFirst = position === 1
 
   const initialAhead = initialAheadRef.current ?? Math.max(position - 1, 0)
@@ -129,7 +173,9 @@ export function QueueStatus({ onNavigate }) {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Estimated wait</p>
-                  <p className="text-sm text-muted-foreground">{formatWait(wait)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isFirst ? "You're next" : formatCountdown(secondsLeft)}
+                  </p>
                 </div>
               </div>
             </div>

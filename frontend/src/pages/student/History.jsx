@@ -17,10 +17,17 @@ const filters = [
   { key: "No-show", label: "No-show" },
 ]
 
+const sortOptions = [
+  { key: "date-desc", label: "Newest first" },
+  { key: "date-asc", label: "Oldest first" },
+  { key: "wait-desc", label: "Longest wait" },
+]
+
 export function History() {
   const { history } = useApp()
   const [filter, setFilter] = useState("all")
   const [query, setQuery] = useState("")
+  const [sortBy, setSortBy] = useState("date-desc")
 
   const served = history.filter((h) => h.outcome === "Served").length
   const avgWait = Math.round(
@@ -29,12 +36,17 @@ export function History() {
   )
 
   const filtered = useMemo(() => {
-    return history.filter((h) => {
+    const matches = history.filter((h) => {
       const matchesFilter = filter === "all" || h.outcome === filter
       const matchesQuery = h.serviceName.toLowerCase().includes(query.trim().toLowerCase())
       return matchesFilter && matchesQuery
     })
-  }, [history, filter, query])
+    return [...matches].sort((a, b) => {
+      if (sortBy === "date-asc") return new Date(a.date) - new Date(b.date)
+      if (sortBy === "wait-desc") return b.waitMinutes - a.waitMinutes
+      return new Date(b.date) - new Date(a.date)
+    })
+  }, [history, filter, query, sortBy])
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -71,15 +83,28 @@ export function History() {
             </button>
           ))}
         </div>
-        <div className="relative sm:w-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by service"
-            className="w-full rounded-xl border border-border bg-card py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-          />
+        <div className="flex gap-2">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="rounded-xl border border-border bg-card px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+          >
+            {sortOptions.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <div className="relative sm:w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by service"
+              className="w-full rounded-xl border border-border bg-card py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+            />
+          </div>
         </div>
       </div>
 

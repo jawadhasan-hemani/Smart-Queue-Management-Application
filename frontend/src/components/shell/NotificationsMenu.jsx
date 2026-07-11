@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { Bell, CheckCircle2, Info, TriangleAlert } from "lucide-react"
+import { Bell, CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react"
 import { useApp } from "../AppContext"
 import { relativeTime } from "../shared"
 
@@ -7,10 +7,11 @@ const toneIcon = {
   info: { Icon: Info, cls: "text-primary" },
   success: { Icon: CheckCircle2, cls: "text-[oklch(0.5_0.12_145)]" },
   warning: { Icon: TriangleAlert, cls: "text-[oklch(0.55_0.13_65)]" },
+  danger: { Icon: XCircle, cls: "text-[oklch(0.55_0.18_25)]" },
 }
 
 export function NotificationsMenu() {
-  const { notifications, markNotificationsRead } = useApp()
+  const { notifications, markNotificationsRead, clearNotifications, dismissNotification } = useApp()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const unread = notifications.filter((n) => !n.read).length
@@ -51,7 +52,18 @@ export function NotificationsMenu() {
         <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-border bg-popover shadow-lg">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>
-            <span className="text-xs text-muted-foreground">{notifications.length} total</span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs text-muted-foreground">{notifications.length} total</span>
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearNotifications}
+                  className="text-xs font-medium text-primary transition-colors hover:text-primary/80"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
           <ul className="max-h-96 divide-y divide-border overflow-y-auto">
             {notifications.length === 0 && (
@@ -62,11 +74,19 @@ export function NotificationsMenu() {
               return (
                 <li key={n.id} className="flex gap-3 px-4 py-3">
                   <Icon className={`mt-0.5 size-4 shrink-0 ${cls}`} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-tight">{n.title}</p>
                     <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{n.body}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground/70">{relativeTime(n.createdAt)}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => dismissNotification(n.id)}
+                    aria-label="Dismiss notification"
+                    className="shrink-0 rounded-lg p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
                 </li>
               )
             })}
