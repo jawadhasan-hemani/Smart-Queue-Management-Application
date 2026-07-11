@@ -1,5 +1,5 @@
-import React from "react"
-import { CheckCircle2, Clock, LogOut, XCircle } from "lucide-react"
+import React, { useMemo, useState } from "react"
+import { CheckCircle2, Clock, LogOut, Search, XCircle } from "lucide-react"
 import { useApp } from "../../components/AppContext"
 import { Badge } from "../../components/ui/badge"
 import { Card, CardContent } from "../../components/ui/card"
@@ -10,13 +10,31 @@ const outcomeConfig = {
   "No-show": { tone: "danger", Icon: XCircle },
 }
 
+const filters = [
+  { key: "all", label: "All" },
+  { key: "Served", label: "Served" },
+  { key: "Left queue", label: "Left" },
+  { key: "No-show", label: "No-show" },
+]
+
 export function History() {
   const { history } = useApp()
+  const [filter, setFilter] = useState("all")
+  const [query, setQuery] = useState("")
+
   const served = history.filter((h) => h.outcome === "Served").length
   const avgWait = Math.round(
     history.filter((h) => h.waitMinutes > 0).reduce((s, h) => s + h.waitMinutes, 0) /
       Math.max(1, history.filter((h) => h.waitMinutes > 0).length),
   )
+
+  const filtered = useMemo(() => {
+    return history.filter((h) => {
+      const matchesFilter = filter === "all" || h.outcome === filter
+      const matchesQuery = h.serviceName.toLowerCase().includes(query.trim().toLowerCase())
+      return matchesFilter && matchesQuery
+    })
+  }, [history, filter, query])
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -35,9 +53,46 @@ export function History() {
         ))}
       </div>
 
+      {/* Filters + search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-1.5">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                filter === f.key
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative sm:w-56">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by service"
+            className="w-full rounded-xl border border-border bg-card py-2 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+          />
+        </div>
+      </div>
+
       <Card>
         <CardContent className="divide-y divide-border p-0">
-          {history.map((h) => {
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center gap-2 p-10 text-center">
+              <Search className="size-6 text-muted-foreground" />
+              <p className="text-sm font-medium">No visits match your filters</p>
+              <p className="text-xs text-muted-foreground">Try a different service name or outcome.</p>
+            </div>
+          )}
+          {filtered.map((h) => {
             const { tone, Icon } = outcomeConfig[h.outcome]
             return (
               <div key={h.id} className="flex items-center gap-4 p-4">
