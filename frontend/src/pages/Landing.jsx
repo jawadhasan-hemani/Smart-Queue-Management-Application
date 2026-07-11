@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { AuthBrandPanel } from '../components/AuthBrandPanel';
 import { useApp } from '../components/AppContext';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -14,6 +16,7 @@ export default function Landing() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [errors, setErrors] = useState({});
 
   const NAME_MAX = 100;
@@ -82,114 +85,53 @@ export default function Landing() {
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-background lg:flex-row text-foreground font-sans">
-      {/* Brand panel — styled to match the AppShell sidebar */}
-      <section className="relative flex flex-col justify-between overflow-hidden bg-sidebar border-b lg:border-b-0 lg:border-r border-sidebar-border px-8 py-10 text-sidebar-foreground lg:w-2/5 lg:px-14 lg:py-14">
-        {/* Top bar with logo */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              </svg>
-            </span>
-            <span className="text-lg font-extrabold tracking-tighter">QueueSmart</span>
-          </div>
-        </div>
-
-        {/* Central Brand statement */}
-        <div className="my-12 max-w-md lg:my-auto">
-          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-sidebar-accent px-3 py-1 text-xs font-bold text-sidebar-accent-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-sidebar-primary">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.9c2.79 0 5.437-.724 7.731-2.006a60.48 60.48 0 0 0-.491-6.347m-15.482 0a48.69 48.69 0 0 1 2.247-5.277m0 0a48.97 48.97 0 0 1 10.97 0m-10.97 0a49.144 49.144 0 0 1 2.247 5.277m10.97-5.277a48.967 48.967 0 0 1 2.247 5.277m0 0a48.967 48.967 0 0 1-2.247 5.277m0 0A48.624 48.624 0 0 1 12 16.5c-1.353 0-2.67-.1-3.957-.293m0 0a48.624 48.624 0 0 1-3.782-3.65m5.466 5.96a48.118 48.118 0 0 0 4.545 0m-4.545 0a48.624 48.624 0 0 1-3.782-3.65m8.327 3.65a48.624 48.624 0 0 0 3.782-3.65m-7.316-6.103a48.243 48.243 0 0 0-3.327 0m0 0a48.243 48.243 0 0 0 0 6.654m0-6.654a48.337 48.337 0 0 1 3.327 0m0 0a48.337 48.337 0 0 1 0 6.654m-3.327-6.654C8.75 6.75 10.33 6 12 6c1.67 0 3.25.75 4.316 2.054m-8.632 0A48.967 48.967 0 0 1 12 9.5a48.967 48.967 0 0 1 4.316-1.446" />
-            </svg>
-            Student Advising Offices
-          </p>
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight lg:text-4xl">
-            Skip the line. Know your wait. Get advised.
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-sidebar-foreground/70">
-            Join advising queues remotely, watch your position update live, and get notified the
-            moment your turn is near.
-          </p>
-
-          <ul className="mt-8 space-y-4 text-sm font-medium">
-            {[
-              { text: "Real-time position and estimated wait times" },
-              { text: "In-app alerts as your turn approaches" },
-              { text: "Staff tools to manage demand and priorities" },
-            ].map(({ text }, idx) => (
-              <li key={text} className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-primary">
-                  {idx === 0 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                  )}
-                  {idx === 1 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                    </svg>
-                  )}
-                  {idx === 2 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.75 3.75 0 0 1 21 12z" />
-                    </svg>
-                  )}
-                </span>
-                <span className="text-sidebar-foreground">{text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="hidden text-xs text-sidebar-foreground/60 lg:block">
-          &copy; 2026 QueueSmart · University Advising Services
-        </p>
-      </section>
+      <AuthBrandPanel />
 
       {/* Form panel */}
       <section className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10 lg:w-3/5">
-        <div className="w-full max-w-md space-y-6">
-          <div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
+        <div className="w-full max-w-md">
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
               {mode === 'login' ? 'Welcome back' : 'Create your account'}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {mode === 'login'
-                ? 'Sign in to view your queues and appointments.'
-                : 'Register with your student email to get started.'}
+                ? 'Sign in to join a queue.'
+                : 'Register with your university email to get started.'}
             </p>
           </div>
 
-          {/* Mode toggle tabs */}
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setErrors({});
-              }}
-              className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
-                mode === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                setErrors({});
-              }}
-              className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
-                mode === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Register
-            </button>
-          </div>
+          <Card>
+            <CardContent className="space-y-6 p-6 sm:p-7">
+              {/* Mode toggle tabs */}
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrors({});
+                  }}
+                  className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
+                    mode === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setErrors({});
+                  }}
+                  className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
+                    mode === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Register
+                </button>
+              </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {mode === 'register' && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground" htmlFor="name">Full name</label>
@@ -221,7 +163,18 @@ export default function Landing() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground" htmlFor="password">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-foreground" htmlFor="password">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/forgot-password')}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 id="password"
                 type="password"
@@ -286,13 +239,36 @@ export default function Landing() {
               </div>
             )}
 
+            {mode === 'register' && (
+              <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-0.5 size-3.5 shrink-0 rounded border-border text-primary focus:ring-2 focus:ring-ring"
+                />
+                <span>
+                  I agree to the{' '}
+                  <button type="button" onClick={() => navigate('/terms')} className="font-semibold text-primary hover:underline">
+                    Terms of Service
+                  </button>{' '}
+                  and{' '}
+                  <button type="button" onClick={() => navigate('/privacy')} className="font-semibold text-primary hover:underline">
+                    Privacy Policy
+                  </button>
+                </span>
+              </label>
+            )}
+
             <Button
               type="submit"
               className="w-full mt-4 h-11 text-sm font-bold"
             >
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
-          </form>
+              </form>
+            </CardContent>
+          </Card>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             {mode === 'login' ? "New here? " : "Already have an account? "}
