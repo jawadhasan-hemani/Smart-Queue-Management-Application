@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown,ArrowLeft,ArrowUp,CheckCircle2,ChevronDown,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,X,XCircle,}
+import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,X,XCircle,}
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -30,17 +30,172 @@ function ServiceStateBadge({ open }) {
 }
 
 function Select({ id, value, onChange, className = "", children }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const options = React.Children.toArray(children).map((child) => ({
+    value: child.props.value,
+    label: child.props.children,
+  }))
+
+  const selected = options.find((o) => String(o.value) === String(value))
+
   return (
-    <div className="relative">
-      <select
+    <div className="relative" ref={ref}>
+      <button
         id={id}
-        value={value}
-        onChange={onChange}
-        className={`w-full appearance-none rounded-xl border border-border bg-card py-2 pl-3 pr-9 text-sm text-foreground transition-all hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring ${className}`}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex w-full items-center justify-between rounded-xl border border-border bg-card py-2 pl-3 pr-3 text-sm text-foreground transition-all hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring ${className}`}
       >
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <span className="truncate">{selected ? selected.label : "Select..."}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-xl animate-in fade-in zoom-in-95">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className={`w-full rounded-lg px-2 py-1.5 text-left text-sm transition-colors ${
+                String(value) === String(o.value)
+                  ? "bg-primary font-medium text-primary-foreground"
+                  : "text-foreground hover:bg-muted"
+              }`}
+              onClick={() => {
+                onChange({ target: { value: o.value } })
+                setOpen(false)
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DatePicker({ id, value, onChange, placeholder = "mm/dd/yyyy" }) {
+  const [open, setOpen] = useState(false)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (value) {
+      const d = new Date(value + "T12:00:00")
+      if (!isNaN(d)) setCurrentMonth(d)
+    }
+  }, [value])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const year = currentMonth.getFullYear()
+  const month = currentMonth.getMonth()
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDay = new Date(year, month, 1).getDay()
+
+  const days = []
+  for (let i = 0; i < firstDay; i++) days.push(null)
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i))
+
+  function handleSelect(d) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    onChange({ target: { value: `${y}-${m}-${day}` } })
+    setOpen(false)
+  }
+
+  const selectedDate = value ? new Date(value + "T12:00:00") : null
+  const displayValue =
+    selectedDate && !isNaN(selectedDate)
+      ? selectedDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      : ""
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex w-full items-center justify-between rounded-xl border border-border bg-card py-2 pl-3 pr-3 text-sm transition-all hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring ${
+          displayValue ? "text-foreground" : "text-muted-foreground"
+        }`}
+      >
+        <span className="truncate">{displayValue || placeholder}</span>
+        <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-1 w-64 rounded-xl border border-border bg-card p-3 shadow-xl animate-in fade-in zoom-in-95 sm:left-0 sm:right-auto">
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <div className="text-sm font-semibold text-foreground">
+              {currentMonth.toLocaleString("default", { month: "long" })} {year}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+          <div className="mb-1 grid grid-cols-7 gap-1 text-center">
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+              <div key={d} className="text-[10px] font-medium uppercase text-muted-foreground">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((d, i) => {
+              if (!d) return <div key={`empty-${i}`} />
+              const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString()
+              const isToday = d.toDateString() === new Date().toDateString()
+
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleSelect(d)}
+                  className={`flex size-7 items-center justify-center rounded-lg text-xs transition-colors hover:bg-muted hover:text-foreground ${
+                    isSelected
+                      ? "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                      : isToday
+                        ? "bg-muted font-semibold text-foreground"
+                        : "text-foreground"
+                  }`}
+                >
+                  {d.getDate()}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -605,15 +760,13 @@ function AdminHistory({ log }) {
               <label className="text-xs font-bold text-foreground" htmlFor="hist-from">
                 From
               </label>
-              <input
+              <DatePicker
                 id="hist-from"
-                type="date"
                 value={dateFrom}
                 onChange={(e) => {
                   setPreset("custom")
                   setDateFrom(e.target.value)
                 }}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring [color-scheme:light]"
               />
             </div>
 
@@ -621,15 +774,13 @@ function AdminHistory({ log }) {
               <label className="text-xs font-bold text-foreground" htmlFor="hist-to">
                 To
               </label>
-              <input
+              <DatePicker
                 id="hist-to"
-                type="date"
                 value={dateTo}
                 onChange={(e) => {
                   setPreset("custom")
                   setDateTo(e.target.value)
                 }}
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring [color-scheme:light]"
               />
             </div>
           </div>
