@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { LogOut, Users } from "lucide-react"
 import { useApp } from "../AppContext"
 import { NotificationsMenu } from "./NotificationsMenu"
+import { Toaster } from "./Toaster"
 
 export function AppShell({ nav, active, onNavigate, title, subtitle, children }) {
   const { user, logout } = useApp()
@@ -15,6 +16,7 @@ export function AppShell({ nav, active, onNavigate, title, subtitle, children })
 
   return (
     <div className="flex min-h-svh bg-background">
+      <Toaster />
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-svh w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-2.5 px-2">

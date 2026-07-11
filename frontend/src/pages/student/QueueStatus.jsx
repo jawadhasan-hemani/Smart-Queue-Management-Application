@@ -1,13 +1,62 @@
-import React from "react"
-import { ArrowRight, BellRing, Clock, MapPin, Search, LogOut } from "lucide-react"
+import React, { useEffect, useRef } from "react"
+import { BellRing, Clock, MapPin, Search, LogOut } from "lucide-react"
 import { useApp } from "../../components/AppContext"
 import { formatWait, StatusBadge } from "../../components/shared"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent } from "../../components/ui/card"
 
+const SIM_TICK_MS = 7000
+
 export function QueueStatus({ onNavigate }) {
-  const { myEntry, orderedQueue, leaveQueue } = useApp()
+  const { myEntry, orderedQueue, leaveQueue, removeEntry, pushNotification } = useApp()
   const active = myEntry()
+
+  // Keep the latest values in a ref so the interval callback below never closes over stale state
+  const latestRef = useRef({})
+  latestRef.current = { active, orderedQueue, removeEntry }
+
+  const initialAheadRef = useRef(null)
+  const almostNotifiedRef = useRef(false)
+
+  const entryId = active?.entry.id ?? null
+  const isWaiting = active ? active.position > 1 : false
+  const activePosition = active?.position ?? null
+  const serviceName = active?.service.name ?? null
+
+  // Reset simulation bookkeeping whenever the tracked queue entry changes (join / leave / re-join)
+  useEffect(() => {
+    initialAheadRef.current = active ? active.position - 1 : null
+    almostNotifiedRef.current = false
+    // Only re-run when a different queue entry is being tracked, not on every position tick
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId])
+
+  // Simulate the line moving: every few seconds "serve" whoever is at the front of the line
+  useEffect(() => {
+    if (!isWaiting) return undefined
+    const timer = setInterval(() => {
+      const { active: current, orderedQueue: getOrdered, removeEntry: remove } = latestRef.current
+      if (!current || current.position <= 1) return
+      const ahead = getOrdered(current.service.id)[0]
+      if (ahead && ahead.id !== current.entry.id) {
+        remove(ahead.id)
+      }
+    }, SIM_TICK_MS)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId, isWaiting])
+
+  // Fire a single "you're up next" notification the moment the user reaches the front
+  useEffect(() => {
+    if (activePosition === 1 && !almostNotifiedRef.current) {
+      almostNotifiedRef.current = true
+      pushNotification({
+        title: "You're up next!",
+        body: `Head to the ${serviceName} desk — you'll be called shortly.`,
+        tone: "warning",
+      })
+    }
+  }, [activePosition, serviceName, pushNotification])
 
   if (!active) {
     return (
@@ -28,7 +77,11 @@ export function QueueStatus({ onNavigate }) {
 
   const { entry, service, position, wait, status } = active
   const isFirst = position === 1
-  const line = orderedQueue(service.id)
+
+  const initialAhead = initialAheadRef.current ?? Math.max(position - 1, 0)
+  const aheadNow = Math.max(position - 1, 0)
+  const progress =
+    initialAhead > 0 ? Math.min(100, Math.round(((initialAhead - aheadNow) / initialAhead) * 100)) : 100
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
@@ -41,6 +94,21 @@ export function QueueStatus({ onNavigate }) {
             <p className={`mt-2 font-medium ${isFirst ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {isFirst ? "You're next!" : "Current position"}
             </p>
+
+            {!isFirst && (
+              <div className="mx-auto mt-5 max-w-xs">
+                <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                  <span>Line progress</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="divide-y divide-border">
             <div className="flex items-center justify-between p-6">
