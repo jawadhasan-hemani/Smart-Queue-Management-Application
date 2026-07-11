@@ -30,7 +30,6 @@ export function Toaster() {
   const isFirstRun = useRef(true)
 
   useEffect(() => {
-    // Don't toast whatever mock notifications already exist when the app first loads
     if (isFirstRun.current) {
       notifications.forEach((n) => seenIds.current.add(n.id))
       isFirstRun.current = false
@@ -43,7 +42,6 @@ export function Toaster() {
     fresh.forEach((n) => seenIds.current.add(n.id))
     setToasts((prev) => [...fresh.map((n) => ({ ...n, visible: false })), ...prev])
 
-    // Trigger the enter transition on the next frame
     requestAnimationFrame(() => {
       setToasts((prev) => prev.map((t) => (fresh.some((f) => f.id === t.id) ? { ...t, visible: true } : t)))
     })

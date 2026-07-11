@@ -148,6 +148,22 @@ export function AppProvider({ children }) {
     return { entry, service, position, wait, status }
   }, [user, queues, services, orderedQueue, estimatedWait])
 
+  const myCurrentEntry = myEntry()
+  const currentPosition = myCurrentEntry?.position
+
+  const prevPosRef = React.useRef(currentPosition)
+  
+  React.useEffect(() => {
+    if (currentPosition && prevPosRef.current && currentPosition < prevPosRef.current) {
+      pushNotification({
+        title: "Queue Update",
+        body: `You've moved up! You are now position #${currentPosition}.`,
+        tone: "info"
+      })
+    }
+    prevPosRef.current = currentPosition
+  }, [currentPosition, pushNotification])
+
   const joinQueue = useCallback(
     (serviceId) => {
       if (!user) return

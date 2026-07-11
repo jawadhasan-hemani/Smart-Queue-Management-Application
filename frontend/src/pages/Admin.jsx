@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown, ArrowUp, CheckCircle2, Clock, LayoutDashboard, Pencil, PhoneCall, Plus, Search, Settings2, TriangleAlert, Users, X} 
+import {ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Clock, History as HistoryIcon, LayoutDashboard, LogOut, Pencil, PhoneCall, Plus, Search, Settings2, TriangleAlert, Users, X, XCircle} 
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -13,13 +13,17 @@ const nav = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "services", label: "Services", icon: Settings2 },
   { key: "queues", label: "Queues", icon: Users },
+  { key: "history", label: "History", icon: HistoryIcon },
 ]
 
 const meta = {
   dashboard: { title: "Admin Dashboard", subtitle: "Services, queue lengths, and quick actions" },
   services: { title: "Service Management", subtitle: "Create and edit the services students can queue for" },
-  queues: { title: "Queue Management", subtitle: "Reorder, remove, or serve the next student" },
+  queues: { title: "Queue Management", subtitle: "Pick a queue to reorder, remove, or serve students" },
+  history: { title: "History", subtitle: "Every visit, served or left — filter by service and date" },
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function ServiceStateBadge({ open }) {
   return <Badge tone={open ? "success" : "neutral"}>{open ? "Open" : "Closed"}</Badge>
@@ -303,134 +307,461 @@ function ServiceManagement({ editingId, onEdit, onSaved }) {
   )
 }
 
-function QueueManagement({ focusServiceId }) {
-  const { services, orderedQueue, estimatedWait, serveNext, removeEntry, moveEntry } = useApp()
-  const [selected, setSelected] = useState(focusServiceId || services[0]?.id || null)
+function QueueOverviewCard({ service, line, onOpen }) {
+  return (
+    <Card className="flex flex-col overflow-hidden">
+      <CardContent className="flex flex-1 flex-col gap-3 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">{service.name}</h3>
+            <p className="mt-0.5 text-sm">
+              <span className={service.open ? "font-medium text-[oklch(0.5_0.12_170)]" : "font-medium text-muted-foreground"}>
+                {service.open ? "Open" : "Closed"}
+              </span>
+              <span className="text-muted-foreground"> · {line.length} student{line.length === 1 ? "" : "s"} in line</span>
+            </p>
+          </div>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+            {line.length}
+          </span>
+        </div>
 
-  useEffect(() => {
-    if (focusServiceId) setSelected(focusServiceId)
-  }, [focusServiceId])
+        {line.length > 0 && (
+          <ul className="max-h-56 space-y-3 overflow-y-auto pr-1">
+            {line.map((entry, idx) => (
+              <li key={entry.id} className="flex items-start gap-3">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm">
+                    <span className="font-medium">{entry.studentName}</span>{" "}
+                    <PriorityBadge priority={entry.priority} />
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Joined {relativeTime(entry.joinedAt)} ·{" "}
+                    {formatWait((entry.__wait ?? 0))}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="border-t border-border px-5 py-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        Open queue
+      </button>
+    </Card>
+  )
+}
 
-  const service = services.find((s) => s.id === selected) || null
+function QueueManagement({ selectedId, onSelect, onServe, onRemove }) {
+  const { services, orderedQueue, estimatedWait, moveEntry } = useApp()
+  const service = services.find((s) => s.id === selectedId) || null
   const line = useMemo(() => (service ? orderedQueue(service.id) : []), [service, orderedQueue])
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap gap-2">
+  if (!service) {
+    if (services.length === 0) {
+      return <p className="mx-auto max-w-5xl text-sm text-muted-foreground">Create a service to start managing its queue.</p>
+    }
+    return (
+      <div className="mx-auto grid max-w-5xl gap-5 sm:grid-cols-2">
         {services.map((s) => {
-          const count = orderedQueue(s.id).length
-          const isSelected = s.id === selected
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSelected(s.id)}
-              className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors ${
-                isSelected
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:border-primary/40"
-              }`}
-            >
-              {s.name}
-              <span className="flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground">
-                {count}
-              </span>
-            </button>
-          )
+          const l = orderedQueue(s.id).map((entry, idx) => ({ ...entry, __wait: estimatedWait(s.id, idx + 1) }))
+          return <QueueOverviewCard key={s.id} service={s} line={l} onOpen={() => onSelect(s.id)} />
         })}
       </div>
+    )
+  }
 
-      {!service ? (
-        <p className="text-sm text-muted-foreground">Create a service to start managing its queue.</p>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between gap-3 border-b border-border p-5">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-semibold">{service.name}</h2>
-                  <ServiceStateBadge open={service.open} />
-                </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {line.length} student{line.length === 1 ? "" : "s"} in line
-                </p>
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> All queues
+      </button>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">{service.name}</h2>
+                <ServiceStateBadge open={service.open} />
               </div>
-              <Button className="h-9 shrink-0" disabled={line.length === 0} onClick={() => serveNext(service.id)}>
-                <PhoneCall className="size-4" /> Serve next
-              </Button>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {line.length} student{line.length === 1 ? "" : "s"} in line
+              </p>
             </div>
+            <Button
+              className="h-9 shrink-0"
+              disabled={line.length === 0}
+              onClick={() => onServe(service, line[0])}
+            >
+              <PhoneCall className="size-4" /> Serve next
+            </Button>
+          </div>
 
-            {line.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-                <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Search className="size-6" />
-                </span>
-                <div>
-                  <p className="font-medium">No one is waiting</p>
-                  <p className="text-sm text-muted-foreground">Students who join this service will show up here.</p>
-                </div>
+          {line.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Search className="size-6" />
+              </span>
+              <div>
+                <p className="font-medium">No one is waiting</p>
+                <p className="text-sm text-muted-foreground">Students who join this service will show up here.</p>
               </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {line.map((entry, idx) => (
-                  <li key={entry.id} className="flex items-center gap-4 p-4">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate font-medium">{entry.studentName}</p>
-                        <PriorityBadge priority={entry.priority} />
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Joined {relativeTime(entry.joinedAt)} · ~{formatWait(estimatedWait(service.id, idx + 1))}
-                      </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {line.map((entry, idx) => (
+                <li key={entry.id} className="flex items-center gap-4 p-4">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-medium">{entry.studentName}</p>
+                      <PriorityBadge priority={entry.priority} />
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => moveEntry(entry.id, "up")}
-                        aria-label={`Move ${entry.studentName} up`}
-                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
-                      >
-                        <ArrowUp className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === line.length - 1}
-                        onClick={() => moveEntry(entry.id, "down")}
-                        aria-label={`Move ${entry.studentName} down`}
-                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
-                      >
-                        <ArrowDown className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeEntry(entry.id)}
-                        aria-label={`Remove ${entry.studentName}`}
-                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Joined {relativeTime(entry.joinedAt)} · ~{formatWait(estimatedWait(service.id, idx + 1))}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveEntry(entry.id, "up")}
+                      aria-label={`Move ${entry.studentName} up`}
+                      className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+                    >
+                      <ArrowUp className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === line.length - 1}
+                      onClick={() => moveEntry(entry.id, "down")}
+                      aria-label={`Move ${entry.studentName} down`}
+                      className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+                    >
+                      <ArrowDown className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(service, entry)}
+                      aria-label={`Remove ${entry.studentName}`}
+                      className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
+const OUTCOME_CONFIG = {
+  served: { label: "Served", tone: "success", Icon: CheckCircle2 },
+  left: { label: "Left queue", tone: "neutral", Icon: LogOut },
+  removed: { label: "Removed by admin", tone: "danger", Icon: XCircle },
+}
+
+const DATE_PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "This week" },
+  { key: "all", label: "All time" },
+]
+
+function toDateInputValue(ts) {
+  const d = new Date(ts)
+  return d.toISOString().slice(0, 10)
+}
+
+function AdminHistory({ log }) {
+  const { services } = useApp()
+  const [serviceFilter, setServiceFilter] = useState("all")
+  const [outcomeFilter, setOutcomeFilter] = useState("all")
+  const [preset, setPreset] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+
+  function applyPreset(key) {
+    setPreset(key)
+    if (key === "today") {
+      const today = toDateInputValue(Date.now())
+      setDateFrom(today)
+      setDateTo(today)
+    } else if (key === "week") {
+      setDateFrom(toDateInputValue(Date.now() - 6 * DAY_MS))
+      setDateTo(toDateInputValue(Date.now()))
+    } else {
+      setDateFrom("")
+      setDateTo("")
+    }
+  }
+
+  const filtered = useMemo(() => {
+    return log.filter((entry) => {
+      if (serviceFilter !== "all" && entry.serviceId !== serviceFilter) return false
+      if (outcomeFilter !== "all" && entry.outcome !== outcomeFilter) return false
+      if (dateFrom && entry.resolvedAt < new Date(dateFrom).setHours(0, 0, 0, 0)) return false
+      if (dateTo && entry.resolvedAt > new Date(dateTo).setHours(23, 59, 59, 999)) return false
+      return true
+    })
+  }, [log, serviceFilter, outcomeFilter, dateFrom, dateTo])
+
+  const served = filtered.filter((e) => e.outcome === "served")
+  const avgWait = served.length
+    ? Math.round(served.reduce((sum, e) => sum + e.waitMinutes, 0) / served.length)
+    : 0
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          { label: "Matching visits", value: String(filtered.length) },
+          { label: "Served", value: String(served.length) },
+          { label: "Left / removed", value: String(filtered.length - served.length) },
+          { label: "Avg. wait (served)", value: `${avgWait} min` },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="p-5">
+              <p className="text-2xl font-semibold tracking-tight">{s.value}</p>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="space-y-4 p-5">
+          <div className="flex flex-wrap gap-2">
+            {DATE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => applyPreset(p.key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  preset === p.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground" htmlFor="hist-service">
+                Service
+              </label>
+              <select
+                id="hist-service"
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="all">All services</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground" htmlFor="hist-outcome">
+                Outcome
+              </label>
+              <select
+                id="hist-outcome"
+                value={outcomeFilter}
+                onChange={(e) => setOutcomeFilter(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="all">All outcomes</option>
+                <option value="served">Served</option>
+                <option value="left">Left queue</option>
+                <option value="removed">Removed by admin</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground" htmlFor="hist-from">
+                From
+              </label>
+              <input
+                id="hist-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setPreset("custom")
+                  setDateFrom(e.target.value)
+                }}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground" htmlFor="hist-to">
+                To
+              </label>
+              <input
+                id="hist-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setPreset("custom")
+                  setDateTo(e.target.value)
+                }}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          {(serviceFilter !== "all" || outcomeFilter !== "all" || dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setServiceFilter("all")
+                setOutcomeFilter("all")
+                applyPreset("all")
+              }}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Reset filters
+            </button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="divide-y divide-border p-0">
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Search className="size-6" />
+              </span>
+              <div>
+                <p className="font-medium">No visits match these filters</p>
+                <p className="text-sm text-muted-foreground">Try widening the date range or clearing a filter.</p>
+              </div>
+            </div>
+          )}
+          {filtered.map((entry) => {
+            const { label, tone, Icon } = OUTCOME_CONFIG[entry.outcome]
+            return (
+              <div key={entry.id} className="flex items-center gap-4 p-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                  <Icon className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-medium">{entry.studentName}</p>
+                    <PriorityBadge priority={entry.priority} />
+                  </div>
+                  <p className="truncate text-sm text-muted-foreground">{entry.serviceName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(entry.resolvedAt).toLocaleString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <Badge tone={tone}>{label}</Badge>
+                  {entry.outcome === "served" && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="size-3" /> {entry.waitMinutes} min wait
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function buildSeedLog() {
+  const now = Date.now()
+  const raw = [
+    { studentName: "Priya Nair", serviceId: "svc-registration", priority: "medium", outcome: "served", daysAgo: 0, hoursAgo: 3, waitMinutes: 9 },
+    { studentName: "Jordan Blake", serviceId: "svc-general", priority: "low", outcome: "left", daysAgo: 0, hoursAgo: 5, waitMinutes: 14 },
+    { studentName: "Emma Torres", serviceId: "svc-career", priority: "medium", outcome: "served", daysAgo: 1, hoursAgo: 2, waitMinutes: 22 },
+    { studentName: "Noah Kim", serviceId: "svc-registration", priority: "high", outcome: "served", daysAgo: 1, hoursAgo: 6, waitMinutes: 6 },
+    { studentName: "Ava Nguyen", serviceId: "svc-financial", priority: "high", outcome: "removed", daysAgo: 2, hoursAgo: 1, waitMinutes: 31 },
+    { studentName: "Ethan Brooks", serviceId: "svc-career", priority: "low", outcome: "served", daysAgo: 3, hoursAgo: 4, waitMinutes: 18 },
+    { studentName: "Sofia Rossi", serviceId: "svc-general", priority: "medium", outcome: "served", daysAgo: 4, hoursAgo: 2, waitMinutes: 12 },
+    { studentName: "Marcus Lee", serviceId: "svc-registration", priority: "low", outcome: "left", daysAgo: 6, hoursAgo: 3, waitMinutes: 20 },
+    { studentName: "Grace Park", serviceId: "svc-general", priority: "high", outcome: "served", daysAgo: 9, hoursAgo: 1, waitMinutes: 8 },
+  ]
+  return raw.map((r, i) => {
+    const resolvedAt = now - r.daysAgo * DAY_MS - r.hoursAgo * 3600_000
+    return {id: `seed-${i}`, studentName: r.studentName, serviceId: r.serviceId, serviceName: undefined, priority: r.priority, outcome: r.outcome, joinedAt: resolvedAt - r.waitMinutes * 60_000, resolvedAt, waitMinutes: r.waitMinutes}
+  })
+}
+
 function Admin() {
   const navigate = useNavigate()
-  const { user } = useApp()
+  const { user, services, queues, serveNext, removeEntry } = useApp()
   const [view, setView] = useState("dashboard")
   const [editingId, setEditingId] = useState(null)
-  const [focusServiceId, setFocusServiceId] = useState(null)
+  const [selectedQueueId, setSelectedQueueId] = useState(null)
+  const [log, setLog] = useState(() => buildSeedLog())
+
+  const justResolvedRef = useRef(new Set())
+  const prevQueuesRef = useRef(queues)
+
+  // Catch students who leave on their own (from the student portal) so History stays complete
+  // even for activity this admin view didn't directly trigger.
+  useEffect(() => {
+    const currentIds = new Set(queues.map((q) => q.id))
+    const vanished = prevQueuesRef.current.filter((q) => !currentIds.has(q.id))
+    if (vanished.length > 0) {
+      setLog((prev) => {
+        const additions = []
+        vanished.forEach((entry) => {
+          if (justResolvedRef.current.has(entry.id)) {
+            justResolvedRef.current.delete(entry.id)
+            return
+          }
+          const svc = services.find((s) => s.id === entry.serviceId)
+          additions.push({
+            id: `log-${entry.id}`,
+            studentName: entry.studentName,
+            serviceId: entry.serviceId,
+            serviceName: svc?.name || "Unknown service",
+            priority: entry.priority,
+            outcome: "left",
+            joinedAt: entry.joinedAt,
+            resolvedAt: Date.now(),
+            waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),
+          })
+        })
+        return additions.length ? [...additions, ...prev] : prev
+      })
+    }
+    prevQueuesRef.current = queues
+  }, [queues, services])
 
   useEffect(() => {
     if (!user) {
@@ -440,9 +771,45 @@ function Admin() {
     }
   }, [user, navigate])
 
+  const resolvedLog = useMemo(
+    () => log.map((e) => ({ ...e, serviceName: e.serviceName || services.find((s) => s.id === e.serviceId)?.name || "Unknown service" })),
+    [log, services],
+  )
+
   if (!user || user.role !== "admin") return null
 
-  const { title, subtitle } = meta[view]
+  function recordResolution(service, entry, outcome) {
+    if (!entry) return
+    justResolvedRef.current.add(entry.id)
+    setLog((prev) => [
+      {
+        id: `log-${entry.id}-${Date.now()}`,
+        studentName: entry.studentName,
+        serviceId: service.id,
+        serviceName: service.name,
+        priority: entry.priority,
+        outcome,
+        joinedAt: entry.joinedAt,
+        resolvedAt: Date.now(),
+        waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),
+      },
+      ...prev,
+    ])
+  }
+
+  function handleServe(service, entry) {
+    recordResolution(service, entry, "served")
+    serveNext(service.id)
+  }
+
+  function handleRemove(service, entry) {
+    recordResolution(service, entry, "removed")
+    removeEntry(entry.id)
+  }
+
+  const { title, subtitle } = view === "queues" && selectedQueueId
+    ? { title: meta.queues.title, subtitle: "Reorder, remove, or serve the next student" }
+    : meta[view]
 
   function handleNavigate(key) {
     setView(key)
@@ -455,7 +822,7 @@ function Admin() {
   }
 
   function goManageQueue(id) {
-    setFocusServiceId(id)
+    setSelectedQueueId(id)
     setView("queues")
   }
 
@@ -465,7 +832,15 @@ function Admin() {
       {view === "services" && (
         <ServiceManagement editingId={editingId} onEdit={setEditingId} onSaved={() => setEditingId(null)} />
       )}
-      {view === "queues" && <QueueManagement focusServiceId={focusServiceId} />}
+      {view === "queues" && (
+        <QueueManagement
+          selectedId={selectedQueueId}
+          onSelect={setSelectedQueueId}
+          onServe={handleServe}
+          onRemove={handleRemove}
+        />
+      )}
+      {view === "history" && <AdminHistory log={resolvedLog} />}
     </AppShell>
   )
 }
