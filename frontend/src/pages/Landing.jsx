@@ -4,20 +4,29 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { AuthBrandPanel } from '../components/AuthBrandPanel';
 import { useApp } from '../components/AppContext';
+import { Eye, EyeOff } from 'lucide-react';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { login, register } = useApp();
+  const { login, register, loginWithGoogle, user, authLoading } = useApp();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
-  const [role, setRole] = useState('student'); // 'student' | 'admin'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') navigate('/admin');
+      else navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const NAME_MAX = 100;
   const EMAIL_MAX = 254;
@@ -64,23 +73,39 @@ export default function Landing() {
     return e;
   }
 
-  function handleSubmit(ev) {
+  async function handleSubmit(ev) {
     ev.preventDefault();
     const e = validate();
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-
-    if (mode === 'login') {
-      login(email, role, name);
-    } else {
-      register(name, email);
+    if (Object.keys(e).length > 0) {
+      setErrors(e);
+      return;
     }
 
-    if (role === 'admin') {
-      navigate('/admin');
-    } else {
-      navigate('/dashboard');
+    try {
+      if (mode === 'login') {
+        await login(email, password);
+      } else {
+        await register(name, email, password);
+      }
+    } catch (err) {
+      setErrors({ email: err.message });
     }
+  }
+
+  async function handleGoogleLogin() {
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setErrors({ email: err.message });
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-sm font-medium text-muted-foreground animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -175,67 +200,51 @@ export default function Landing() {
                   </button>
                 )}
               </div>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                maxLength={PASSWORD_MAX}
-                className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  maxLength={PASSWORD_MAX}
+                  className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
               {errors.password && <p className="text-[11px] text-destructive font-medium">{errors.password}</p>}
             </div>
 
             {mode === 'register' && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground" htmlFor="confirm">Confirm password</label>
-                <input
-                  id="confirm"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Re-enter password"
-                  maxLength={PASSWORD_MAX}
-                  className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-                />
-                {errors.confirm && <p className="text-[11px] text-destructive font-medium">{errors.confirm}</p>}
-              </div>
-            )}
-
-            {mode === 'login' && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-foreground">Sign in as</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <input
+                    id="confirm"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Re-enter password"
+                    maxLength={PASSWORD_MAX}
+                    className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all pr-10"
+                  />
                   <button
                     type="button"
-                    onClick={() => setRole('student')}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-bold capitalize transition-all ${
-                      role === 'student'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/40'
-                    }`}
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute inset-y-0 right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.9c2.79 0 5.437-.724 7.731-2.006a60.48 60.48 0 0 0-.491-6.347m-15.482 0a48.69 48.69 0 0 1 2.247-5.277m0 0a48.97 48.97 0 0 1 10.97 0m-10.97 0a49.144 49.144 0 0 1 2.247 5.277m10.97-5.277a48.967 48.967 0 0 1 2.247 5.277m0 0a48.967 48.967 0 0 1-2.247 5.277m0 0A48.624 48.624 0 0 1 12 16.5c-1.353 0-2.67-.1-3.957-.293m0 0a48.624 48.624 0 0 1-3.782-3.65" />
-                    </svg>
-                    student
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-bold capitalize transition-all ${
-                      role === 'admin'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/40'
-                    }`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.75 3.75 0 0 1 21 12z" />
-                    </svg>
-                    admin
+                    {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                {errors.confirm && <p className="text-[11px] text-destructive font-medium">{errors.confirm}</p>}
               </div>
             )}
 
@@ -266,6 +275,29 @@ export default function Landing() {
             >
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
+
+            <div className="relative mt-6 mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full h-11 text-sm font-bold bg-white text-black border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="size-5">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              Google
+            </button>
               </form>
             </CardContent>
           </Card>
