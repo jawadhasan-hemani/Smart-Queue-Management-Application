@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,X,XCircle,}
+import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,UserPlus,X,XCircle,}
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -14,6 +14,7 @@ const nav = [
   { key: "services", label: "Services", icon: Settings2 },
   { key: "queues", label: "Queues", icon: Users },
   { key: "history", label: "History", icon: HistoryIcon },
+  { key: "users", label: "User Management", icon: UserPlus },
 ]
 
 const meta = {
@@ -21,6 +22,7 @@ const meta = {
   services: { title: "Service Management", subtitle: "Create and edit the services students can queue for" },
   queues: { title: "Queue Management", subtitle: "Pick a queue to reorder, remove, or serve students" },
   history: { title: "History", subtitle: "Every visit, served or left — filter by service and date" },
+  users: { title: "User Management", subtitle: "Manage admin users and their access levels" },
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -853,6 +855,84 @@ function AdminHistory({ log }) {
   )
 }
 
+function UserManagement() {
+  const { admins, addAdmin, removeAdmin } = useApp()
+  const [newEmail, setNewEmail] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
+
+  const handleAddAdmin = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      if (!newEmail.trim()) {
+        throw new Error("Please enter an email address.")
+      }
+      await addAdmin(newEmail.trim())
+      setSuccess(`Successfully added ${newEmail} as an admin.`)
+      setNewEmail("")
+    } catch (err) {
+      setError(err.message || "Failed to add admin.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="p-6">
+          <h3 className="text-lg font-medium text-slate-800 mb-4">Add New Admin</h3>
+          <form onSubmit={handleAddAdmin} className="space-y-4">
+            <div className="flex gap-4">
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="admin@example.com"
+                className="flex-1 px-3 py-2 border rounded-md"
+                required
+              />
+              <Button type="submit" disabled={loading}>
+                {loading ? "Adding..." : "Add Admin"}
+              </Button>
+            </div>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {success && <p className="text-green-500 text-sm">{success}</p>}
+            <div className="bg-blue-50 text-blue-800 p-4 rounded-md text-sm">
+              <p className="font-medium mb-1">Note:</p>
+              <p>If they already have an account (Google or email), they will keep their password. If this is a new account, the default password is <strong>QueueSmart2026!</strong></p>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <h3 className="text-lg font-medium text-slate-800 mb-4">Current Admins</h3>
+          <div className="divide-y border rounded-md">
+            {admins.map(email => (
+              <div key={email} className="flex justify-between items-center p-4">
+                <span className="font-medium text-slate-700">{email}</span>
+                {email !== "admin@queuesmart.com" ? (
+                  <Button variant="outline" tone="danger" onClick={() => removeAdmin(email)}>
+                    Remove
+                  </Button>
+                ) : (
+                  <Badge tone="info">Master Admin</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function buildSeedLog() {
   const now = Date.now()
   const raw = [
@@ -991,6 +1071,7 @@ function Admin() {
         />
       )}
       {view === "history" && <AdminHistory log={resolvedLog} />}
+      {view === "users" && <UserManagement />}
     </AppShell>
   )
 }
