@@ -1,167 +1,162 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { AuthBrandPanel } from '../components/AuthBrandPanel';
 import { useApp } from '../components/AppContext';
+import { Eye, EyeOff } from 'lucide-react';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { login, register } = useApp();
+  const { login, register, loginWithGoogle, user, authLoading } = useApp();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
-  const [role, setRole] = useState('student'); // 'student' | 'admin'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') navigate('/admin');
+      else navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
+  const NAME_MAX = 100;
+  const EMAIL_MAX = 254;
+  const PASSWORD_MIN = 8;
+  const PASSWORD_MAX = 64;
 
   function validate() {
     const e = {};
-    if (mode === 'register' && name.trim().length < 2) {
-      e.name = 'Please enter your full name.';
+
+    if (mode === 'register') {
+      if (!name.trim()) {
+        e.name = 'Full name is required.';
+      } else if (name.trim().length < 2) {
+        e.name = 'Please enter your full name.';
+      } else if (name.trim().length > NAME_MAX) {
+        e.name = `Name must be ${NAME_MAX} characters or fewer.`;
+      }
     }
+
     if (!email.trim()) {
       e.email = 'Email is required.';
+    } else if (email.trim().length > EMAIL_MAX) {
+      e.email = `Email must be ${EMAIL_MAX} characters or fewer.`;
     } else if (!emailRe.test(email)) {
       e.email = 'Enter a valid email address.';
     }
+
     if (!password) {
       e.password = 'Password is required.';
-    } else if (password.length < 6) {
-      e.password = 'Password must be at least 6 characters.';
+    } else if (password.length < PASSWORD_MIN) {
+      e.password = `Password must be at least ${PASSWORD_MIN} characters.`;
+    } else if (password.length > PASSWORD_MAX) {
+      e.password = `Password must be ${PASSWORD_MAX} characters or fewer.`;
     }
-    if (mode === 'register' && confirm !== password) {
-      e.confirm = 'Passwords do not match.';
+
+    if (mode === 'register') {
+      if (!confirm) {
+        e.confirm = 'Please confirm your password.';
+      } else if (confirm !== password) {
+        e.confirm = 'Passwords do not match.';
+      }
     }
+
     return e;
   }
 
-  function handleSubmit(ev) {
+  async function handleSubmit(ev) {
     ev.preventDefault();
     const e = validate();
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-
-    if (mode === 'login') {
-      login(email, role, name);
-    } else {
-      register(name, email);
+    if (Object.keys(e).length > 0) {
+      setErrors(e);
+      return;
     }
 
-    if (role === 'admin') {
-      navigate('/admin');
-    } else {
-      navigate('/dashboard');
+    try {
+      if (mode === 'login') {
+        await login(email, password);
+      } else {
+        await register(name, email, password);
+      }
+    } catch (err) {
+      setErrors({ email: err.message });
     }
+  }
+
+  async function handleGoogleLogin() {
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setErrors({ email: err.message });
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-sm font-medium text-muted-foreground animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-background lg:flex-row text-foreground font-sans">
-      {/* Brand panel */}
-      <section className="relative flex flex-col justify-between overflow-hidden bg-card border-b lg:border-b-0 lg:border-r border-border px-8 py-10 lg:w-[46%] lg:px-14 lg:py-14">
-        {/* Top bar with logo */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo-light.png" alt="QueueSmart" className="h-9 w-9 object-contain rounded-[8px]" />
-            <span className="text-lg font-extrabold tracking-tighter text-foreground">QueueSmart</span>
-          </div>
-        </div>
-
-        {/* Central Brand statement */}
-        <div className="my-12 max-w-md lg:my-auto">
-          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-bold text-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-primary">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.9c2.79 0 5.437-.724 7.731-2.006a60.48 60.48 0 0 0-.491-6.347m-15.482 0a48.69 48.69 0 0 1 2.247-5.277m0 0a48.97 48.97 0 0 1 10.97 0m-10.97 0a49.144 49.144 0 0 1 2.247 5.277m10.97-5.277a48.967 48.967 0 0 1 2.247 5.277m0 0a48.967 48.967 0 0 1-2.247 5.277m0 0A48.624 48.624 0 0 1 12 16.5c-1.353 0-2.67-.1-3.957-.293m0 0a48.624 48.624 0 0 1-3.782-3.65m5.466 5.96a48.118 48.118 0 0 0 4.545 0m-4.545 0a48.624 48.624 0 0 1-3.782-3.65m8.327 3.65a48.624 48.624 0 0 0 3.782-3.65m-7.316-6.103a48.243 48.243 0 0 0-3.327 0m0 0a48.243 48.243 0 0 0 0 6.654m0-6.654a48.337 48.337 0 0 1 3.327 0m0 0a48.337 48.337 0 0 1 0 6.654m-3.327-6.654C8.75 6.75 10.33 6 12 6c1.67 0 3.25.75 4.316 2.054m-8.632 0A48.967 48.967 0 0 1 12 9.5a48.967 48.967 0 0 1 4.316-1.446" />
-            </svg>
-            Student Advising Offices
-          </p>
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight lg:text-4xl">
-            Skip the line. Know your wait. Get advised.
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            Join advising queues remotely, watch your position update live, and get notified the
-            moment your turn is near.
-          </p>
-
-          <ul className="mt-8 space-y-4 text-sm font-medium">
-            {[
-              { text: "Real-time position and estimated wait times" },
-              { text: "In-app alerts as your turn approaches" },
-              { text: "Staff tools to manage demand and priorities" },
-            ].map(({ text }, idx) => (
-              <li key={text} className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-muted text-primary">
-                  {idx === 0 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                  )}
-                  {idx === 1 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                    </svg>
-                  )}
-                  {idx === 2 && (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.75 3.75 0 0 1 21 12z" />
-                    </svg>
-                  )}
-                </span>
-                <span className="text-foreground">{text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="hidden text-xs text-muted-foreground lg:block">
-          &copy; 2026 QueueSmart · University Advising Services
-        </p>
-      </section>
+      <AuthBrandPanel />
 
       {/* Form panel */}
-      <section className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10">
-        <div className="w-full max-w-md space-y-6">
-          <div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
+      <section className="flex flex-1 items-center justify-center px-6 py-12 sm:px-10 lg:w-3/5">
+        <div className="w-full max-w-md">
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
               {mode === 'login' ? 'Welcome back' : 'Create your account'}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {mode === 'login'
-                ? 'Sign in to view your queues and appointments.'
-                : 'Register with your student email to get started.'}
+                ? 'Sign in to join a queue.'
+                : 'Register with your university email to get started.'}
             </p>
           </div>
 
-          {/* Mode toggle tabs */}
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setErrors({});
-              }}
-              className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
-                mode === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                setErrors({});
-              }}
-              className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
-                mode === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Register
-            </button>
-          </div>
+          <Card>
+            <CardContent className="space-y-6 p-6 sm:p-7">
+              {/* Mode toggle tabs */}
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrors({});
+                  }}
+                  className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
+                    mode === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setErrors({});
+                  }}
+                  className={`h-9 rounded-lg text-xs font-bold capitalize transition-all ${
+                    mode === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Register
+                </button>
+              </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {mode === 'register' && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground" htmlFor="name">Full name</label>
@@ -171,6 +166,7 @@ export default function Landing() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Jordan Alvarez"
+                  maxLength={NAME_MAX}
                   className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                 />
                 {errors.name && <p className="text-[11px] text-destructive font-medium">{errors.name}</p>}
@@ -185,73 +181,92 @@ export default function Landing() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@university.edu"
+                maxLength={EMAIL_MAX}
                 className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
               />
               {errors.email && <p className="text-[11px] text-destructive font-medium">{errors.email}</p>}
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-foreground" htmlFor="password">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/forgot-password')}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  maxLength={PASSWORD_MAX}
+                  className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
               {errors.password && <p className="text-[11px] text-destructive font-medium">{errors.password}</p>}
             </div>
 
             {mode === 'register' && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground" htmlFor="confirm">Confirm password</label>
-                <input
-                  id="confirm"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Re-enter password"
-                  className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-                />
+                <div className="relative">
+                  <input
+                    id="confirm"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Re-enter password"
+                    maxLength={PASSWORD_MAX}
+                    className="w-full px-4 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute inset-y-0 right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
+                  >
+                    {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
                 {errors.confirm && <p className="text-[11px] text-destructive font-medium">{errors.confirm}</p>}
               </div>
             )}
 
-            {mode === 'login' && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-foreground">Sign in as</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole('student')}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-bold capitalize transition-all ${
-                      role === 'student'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/40'
-                    }`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.9c2.79 0 5.437-.724 7.731-2.006a60.48 60.48 0 0 0-.491-6.347m-15.482 0a48.69 48.69 0 0 1 2.247-5.277m0 0a48.97 48.97 0 0 1 10.97 0m-10.97 0a49.144 49.144 0 0 1 2.247 5.277m10.97-5.277a48.967 48.967 0 0 1 2.247 5.277m0 0a48.967 48.967 0 0 1-2.247 5.277m0 0A48.624 48.624 0 0 1 12 16.5c-1.353 0-2.67-.1-3.957-.293m0 0a48.624 48.624 0 0 1-3.782-3.65" />
-                    </svg>
-                    student
+            {mode === 'register' && (
+              <label className="flex items-start gap-2.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-0.5 size-3.5 shrink-0 rounded border-border text-primary focus:ring-2 focus:ring-ring"
+                />
+                <span>
+                  I agree to the{' '}
+                  <button type="button" onClick={() => navigate('/terms')} className="font-semibold text-primary hover:underline">
+                    Terms of Service
+                  </button>{' '}
+                  and{' '}
+                  <button type="button" onClick={() => navigate('/privacy')} className="font-semibold text-primary hover:underline">
+                    Privacy Policy
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-bold capitalize transition-all ${
-                      role === 'admin'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/40'
-                    }`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.75 3.75 0 0 1 21 12z" />
-                    </svg>
-                    admin
-                  </button>
-                </div>
-              </div>
+                </span>
+              </label>
             )}
 
             <Button
@@ -260,7 +275,32 @@ export default function Landing() {
             >
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
-          </form>
+
+            <div className="relative mt-6 mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full h-11 text-sm font-bold bg-white text-black border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="size-5">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              Google
+            </button>
+              </form>
+            </CardContent>
+          </Card>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             {mode === 'login' ? "New here? " : "Already have an account? "}
