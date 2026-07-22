@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { CheckCircle2, Info, TriangleAlert, X } from "lucide-react"
+import { CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react"
 import { useApp } from "../AppContext"
 
 const toneStyles = {
@@ -14,18 +14,48 @@ const toneStyles = {
     iconCls: "text-[oklch(0.55_0.13_65)]",
     ringCls: "border-[oklch(0.72_0.14_75)]/40",
   },
+  danger: {
+    Icon: XCircle,
+    iconCls: "text-[oklch(0.55_0.18_25)]",
+    ringCls: "border-[oklch(0.62_0.18_25)]/40",
+  },
 }
 
 const TOAST_DURATION_MS = 5000
 
+// Short two-tone chime built with the Web Audio API — no external asset needed.
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const now = ctx.currentTime
+    ;[880, 1175].forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = "sine"
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0.0001, now + i * 0.12)
+      gain.gain.exponentialRampToValueAtTime(0.15, now + i * 0.12 + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.12 + 0.22)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + i * 0.12)
+      osc.stop(now + i * 0.12 + 0.25)
+    })
+    setTimeout(() => ctx.close(), 600)
+  } catch {
+    // Web Audio can be blocked (autoplay policy, unsupported) — fail silently
+  }
+}
+
 export function Toaster() {
-  const { notifications } = useApp()
+  const { notifications, muteToasts } = useApp()
   const [toasts, setToasts] = useState([])
   const seenIds = useRef(new Set())
   const isFirstRun = useRef(true)
 
   useEffect(() => {
-    // Don't toast whatever mock notifications already exist when the app first loads
     if (isFirstRun.current) {
       notifications.forEach((n) => seenIds.current.add(n.id))
       isFirstRun.current = false
@@ -36,9 +66,18 @@ export function Toaster() {
     if (fresh.length === 0) return
 
     fresh.forEach((n) => seenIds.current.add(n.id))
+
+    // "Up next" alerts get a sound + vibration cue regardless of mute, since it's time-critical
+    const urgent = fresh.some((n) => n.tone === "warning")
+    if (urgent) {
+      playChime()
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120])
+    }
+
+    if (muteToasts) return
+
     setToasts((prev) => [...fresh.map((n) => ({ ...n, visible: false })), ...prev])
 
-    // Trigger the enter transition on the next frame
     requestAnimationFrame(() => {
       setToasts((prev) => prev.map((t) => (fresh.some((f) => f.id === t.id) ? { ...t, visible: true } : t)))
     })
@@ -47,7 +86,7 @@ export function Toaster() {
       setTimeout(() => dismiss(n.id), TOAST_DURATION_MS)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notifications])
+  }, [notifications, muteToasts])
 
   function dismiss(id) {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, visible: false } : t)))
