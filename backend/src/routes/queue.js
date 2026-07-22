@@ -1,6 +1,8 @@
 const express = require('express');
+const { randomUUID } = require('crypto');
 
 const { services, queueEntries } = require('../data/store');
+const { validateJoinInput } = require('../validators/queueValidator');
 
 const router = express.Router();
 
@@ -45,6 +47,62 @@ router.get('/:serviceId', (req, res) => {
     serviceName: service.name,
     count: ordered.length,
     queue: withPositionAndWait(ordered, service),
+  });
+});
+
+router.post('/:serviceId/join', (req, res) => {
+  const service = services.find((s) => s.id === req.params.serviceId);
+  if (!service) {
+    return res.status(404).json({ error: 'Service not found.' });
+  }
+
+  if (!service.open) {
+    return res.status(400).json({ error: 'This service is not currently open for new queue entries.' });
+  }
+
+  const { valid, errors } = validateJoinInput(req.body);
+  if (!valid) {
+    return res.status(400).json({ errors });
+  }
+
+  const entry = {
+    id: randomUUID(),
+    serviceId: service.id,
+    studentName: req.body.studentName.trim(),
+    priority: req.body.priority || 'medium',
+    joinedAt: Date.now(),
+  };
+
+  queueEntries.push(entry);
+
+  const withPosition = withPositionAndWait(orderedQueueFor(service.id), service);
+  const placed = withPosition.find((e) => e.id === entry.id);
+
+  res.status(201).json({
+    entry: placed,
+    queue: withPosition,
+  });
+});
+
+router.delete('/:serviceId/leave/:entryId', (req, res) => {
+  const service = services.find((s) => s.id === req.params.serviceId);
+  if (!service) {
+    return res.status(404).json({ error: 'Service not found.' });
+  }
+
+  const index = queueEntries.findIndex(
+    (e) => e.id === req.params.entryId && e.serviceId === service.id,
+  );
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Queue entry not found.' });
+  }
+
+  const [removed] = queueEntries.splice(index, 1);
+
+  res.status(200).json({
+    removed,
+    queue: withPositionAndWait(orderedQueueFor(service.id), service),
   });
 });
 
