@@ -1,4 +1,4 @@
-const app = require('./src/app');
+const app = require('./Admin/src/App');
 
 const PORT = process.env.PORT || 5000;
 
