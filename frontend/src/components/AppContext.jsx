@@ -63,9 +63,34 @@ export function AppProvider({ children }) {
   const [admins, setAdmins] = useSharedState("qs_admins", ["admin@queuesmart.com"])
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const role = (admins.includes(firebaseUser.email) || firebaseUser.email === "admin@queuesmart.com") ? "admin" : "student"
+        let role = (admins.includes(firebaseUser.email) || firebaseUser.email === "admin@queuesmart.com") ? "admin" : "student"
+        
+        try {
+          const token = await firebaseUser.getIdToken();
+          const response = await fetch('/api/auth/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: firebaseUser.displayName || firebaseUser.email.split("@")[0].replace(/[._]/g, " "),
+              role
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.user && data.user.role) {
+              role = data.user.role;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to sync user with backend:", error);
+        }
+
         setUserState({
           name: firebaseUser.displayName || firebaseUser.email.split("@")[0].replace(/[._]/g, " "),
           email: firebaseUser.email,
