@@ -10,7 +10,8 @@ try {
 
 let isInitialized = false;
 
-if (!admin.apps.length) {
+// Check if firebase admin has been initialized
+if (admin.apps === undefined || admin.apps.length === 0) {
   try {
     if (serviceAccount) {
       admin.initializeApp({
