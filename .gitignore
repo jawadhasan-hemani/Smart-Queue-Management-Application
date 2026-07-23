@@ -1,1 +1,5 @@
 node_modules
+z.sh
+backend/config/serviceAccountKey.json
+backend/config/serviceAccountKey.json.json
+notifications-history-module.zip
