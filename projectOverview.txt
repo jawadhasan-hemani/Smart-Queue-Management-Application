@@ -64,3 +64,96 @@ Proper input types (email, numbers, dates)
 
 
 We are choosing student advising offices.
+
+Assignment 3: Back-End Development & API Implementation (A3)
+QueueSmart – Smart Queue Management Application
+Description
+In this assignment, your team will design and implement the back end for the QueueSmart application you designed in Assignment 1 and built the UI for in Assignment 2.
+
+The focus of this assignment is:
+
+Backend logic
+
+API design and implementation
+
+Validations and testing
+
+You are not required to implement a real database in this assignment.
+In-memory data or hard-coded values are acceptable.
+
+Problem Statement
+Same as Assignment 1 (QueueSmart).
+
+Scope of This Assignment
+Backend development only
+
+REST APIs or equivalent backend interfaces
+
+Integration with your A2 front end
+
+No persistent database required (yet)
+
+Required Back-End Modules
+Your backend must include the following modules or logical components:
+
+1. Authentication Module
+User registration
+
+Login authentication
+
+Role handling (User vs Administrator)
+
+Basic input validation
+
+2. Service Management Module
+Create, update, and list services
+
+Each service should include:
+
+Service name
+
+Description
+
+Expected duration
+
+Priority level
+
+3. Queue Management Module
+Allow users to:
+
+Join a queue
+
+Leave a queue
+
+Allow administrators to:
+
+View current queue
+
+Serve next user
+
+Queue ordering should consider:
+
+Arrival order
+
+Priority (if applicable)
+
+4. Wait-Time Estimation Logic
+Implement basic wait-time estimation
+
+Can be rule-based (e.g., position × expected duration)
+
+No advanced algorithms required
+
+5. Notification Module
+Backend logic to trigger notifications when:
+
+User joins a queue
+
+User is close to being served
+
+Notifications may be logged or returned to the front end (no real email/SMS required)
+
+6. History Module
+Track queue participation history for users
+
+History may be stored in memory or mocked

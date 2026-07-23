@@ -6,6 +6,9 @@ import React, {
   useState,
   useEffect,
 } from "react"
+import { auth, googleProvider, firebaseConfig } from "../firebase"
+import { initializeApp } from "firebase/app"
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth"
 
 import { mockServices, mockQueues, mockHistory, mockNotifications } from "../mockData"
 
@@ -54,23 +57,52 @@ function useSharedState(key, initialValue) {
 }
 
 export function AppProvider({ children }) {
-  const [user, setUserState] = useState(() => {
-    try {
-      const u = window.sessionStorage.getItem("qs_user")
-      return u ? JSON.parse(u) : null
-    } catch {
-      return null
-    }
-  })
+  const [user, setUserState] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
-  const setUser = useCallback((val) => {
-    setUserState((prev) => {
-      const next = typeof val === "function" ? val(prev) : val
-      if (next) window.sessionStorage.setItem("qs_user", JSON.stringify(next))
-      else window.sessionStorage.removeItem("qs_user")
-      return next
+  const [admins, setAdmins] = useSharedState("qs_admins", ["admin@queuesmart.com"])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        let role = (admins.includes(firebaseUser.email) || firebaseUser.email === "admin@queuesmart.com") ? "admin" : "student"
+        
+        try {
+          const token = await firebaseUser.getIdToken();
+          const response = await fetch('/api/auth/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: firebaseUser.displayName || firebaseUser.email.split("@")[0].replace(/[._]/g, " "),
+              role
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.user && data.user.role) {
+              role = data.user.role;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to sync user with backend:", error);
+        }
+
+        setUserState({
+          name: firebaseUser.displayName || firebaseUser.email.split("@")[0].replace(/[._]/g, " "),
+          email: firebaseUser.email,
+          role: role,
+        })
+      } else {
+        setUserState(null)
+      }
+      setAuthLoading(false)
     })
-  }, [])
+    return () => unsubscribe()
+  }, [admins])
 
   const [services, setServices] = useSharedState("qs_services", mockServices)
   const [queues, setQueues] = useSharedState("qs_queues", mockQueues)
@@ -132,20 +164,43 @@ export function AppProvider({ children }) {
     [],
   )
 
-  const login = useCallback((email, role, name) => {
-    const derived = name || email.split("@")[0].replace(/[._]/g, " ")
-    setUser({
-      name: derived.replace(/\b\w/g, (c) => c.toUpperCase()),
-      email,
-      role,
-    })
+  const login = useCallback(async (email, password) => {
+    await signInWithEmailAndPassword(auth, email, password)
   }, [])
 
-  const register = useCallback((name, email) => {
-    setUser({ name, email, role: "student" })
+  const register = useCallback(async (name, email, password) => {
+    await createUserWithEmailAndPassword(auth, email, password)
   }, [])
 
-  const logout = useCallback(() => setUser(null), [])
+  const loginWithGoogle = useCallback(async () => {
+    await signInWithPopup(auth, googleProvider)
+  }, [])
+
+  const logout = useCallback(async () => {
+    await signOut(auth)
+  }, [])
+
+  const addAdmin = useCallback(async (email) => {
+    if (admins.includes(email)) return
+    
+    // Initialize a secondary app to create a user without logging out the current admin
+    const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp-" + Date.now())
+    const { getAuth } = await import("firebase/auth");
+    const secAuth = getAuth(secondaryApp);
+    try {
+      await createUserWithEmailAndPassword(secAuth, email, "QueueSmart2026!")
+    } catch (err) {
+      if (err.code !== "auth/email-already-in-use") {
+        throw err;
+      }
+    }
+    setAdmins(prev => [...prev, email])
+  }, [admins, setAdmins])
+
+  const removeAdmin = useCallback((email) => {
+    if (email === "admin@queuesmart.com") return // Protect master account
+    setAdmins(prev => prev.filter(e => e !== email))
+  }, [setAdmins])
 
   const saveService = useCallback(
     (service) => {
@@ -316,13 +371,18 @@ export function AppProvider({ children }) {
   const value = useMemo(
     () => ({
       user,
+      authLoading,
+      admins,
       services,
       queues,
       history,
       notifications,
       login,
       register,
+      loginWithGoogle,
       logout,
+      addAdmin,
+      removeAdmin,
       saveService,
       toggleServiceOpen,
       orderedQueue,
@@ -344,13 +404,18 @@ export function AppProvider({ children }) {
     }),
     [
       user,
+      authLoading,
+      admins,
       services,
       queues,
       history,
       notifications,
       login,
       register,
+      loginWithGoogle,
       logout,
+      addAdmin,
+      removeAdmin,
       saveService,
       toggleServiceOpen,
       orderedQueue,
