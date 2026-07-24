@@ -109,6 +109,53 @@ export function AppProvider({ children }) {
   const [history, setHistory] = useSharedState("qs_history", mockHistory)
   const [notifications, setNotifications] = useSharedState("qs_notifications", mockNotifications)
 
+  // --- Backend integration: History & Notification modules ---
+  // Pulls real data from the backend (falls back to whatever is already in
+  // shared/local state — the mock seed — if the request fails, so the UI
+  // never breaks if the backend isn't running).
+
+  const mapHistoryEntry = useCallback((entry) => ({
+    id: entry.id,
+    serviceName: entry.serviceName,
+    date: new Date(entry.endedAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    outcome: entry.status === "served" ? "Served" : "Left queue",
+    waitMinutes: entry.waitedMinutes,
+  }), [])
+
+  const notificationCopy = {
+    joined: { title: "Joined queue", tone: "success" },
+    near_turn: { title: "Almost your turn", tone: "warning" },
+    served: { title: "You've been served", tone: "success" },
+    custom: { title: "Notification", tone: "info" },
+  }
+
+  const mapNotification = useCallback((n) => ({
+    id: n.id,
+    title: notificationCopy[n.type]?.title ?? "Notification",
+    body: n.message,
+    createdAt: new Date(n.createdAt).getTime(),
+    read: n.read,
+    tone: notificationCopy[n.type]?.tone ?? "info",
+  }), [])
+
+  useEffect(() => {
+    const query = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
+
+    fetch(`/api/history${query}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setHistory(data.history.map(mapHistoryEntry)))
+      .catch((err) => console.error("Failed to load history from backend:", err))
+
+    fetch(`/api/notifications${query}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setNotifications(data.notifications.map(mapNotification)))
+      .catch((err) => console.error("Failed to load notifications from backend:", err))
+  }, [user?.name, mapHistoryEntry, mapNotification])
+
   // Per-device notification preferences (not shared across tabs/users on purpose)
   const [muteToasts, setMuteToastsState] = useState(() => {
     try {
@@ -357,7 +404,15 @@ export function AppProvider({ children }) {
   )
 
   const markNotificationsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    setNotifications((prev) => {
+      const unreadIds = prev.filter((n) => !n.read).map((n) => n.id)
+      unreadIds.forEach((id) => {
+        fetch(`/api/notifications/${id}/read`, { method: "PATCH" }).catch((err) =>
+          console.error("Failed to mark notification read on backend:", err),
+        )
+      })
+      return prev.map((n) => ({ ...n, read: true }))
+    })
   }, [])
 
   const clearNotifications = useCallback(() => {
