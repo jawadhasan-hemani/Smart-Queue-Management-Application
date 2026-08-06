@@ -1,10 +1,15 @@
 const request = require('supertest');
 
+const { createFakeDb } = require('./testUtils/fakeDb');
+const mockDb = createFakeDb();
+jest.mock('../src/data/db', () => ({ pool: mockDb }));
+
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');
 
 beforeEach(() => {
   resetStore();
+  mockDb.reset();
 });
 
 describe('GET /api/notifications', () => {
@@ -33,6 +38,42 @@ describe('GET /api/notifications', () => {
     expect(res.status).toBe(200);
     expect(res.body.notifications.length).toBeGreaterThan(0);
     expect(res.body.notifications.every((n) => n.studentName === 'Alice')).toBe(true);
+  });
+
+  it('filters notifications by search text matching the message', async () => {
+    const service = services[0];
+    await request(app).post('/api/notifications').send({
+      studentName: 'Alice',
+      serviceId: service.id,
+      type: 'custom',
+      message: 'Please bring your ID card',
+    });
+    await request(app).post('/api/notifications').send({
+      studentName: 'Bob',
+      serviceId: service.id,
+      type: 'custom',
+      message: 'Unrelated note',
+    });
+
+    const res = await request(app).get('/api/notifications').query({ search: 'ID card' });
+    expect(res.status).toBe(200);
+    expect(res.body.notifications.length).toBe(1);
+    expect(res.body.notifications[0].studentName).toBe('Alice');
+  });
+
+  it('filters notifications by type', async () => {
+    const service = services[0];
+    await request(app).post(`/api/queue/${service.id}/join`).send({ studentName: 'Alice' });
+
+    const res = await request(app).get('/api/notifications').query({ type: 'joined' });
+    expect(res.status).toBe(200);
+    expect(res.body.notifications.every((n) => n.type === 'joined')).toBe(true);
+  });
+
+  it('rejects an invalid type filter', async () => {
+    const res = await request(app).get('/api/notifications').query({ type: 'not-a-type' });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.type).toBeDefined();
   });
 
   it('rejects a blank studentName filter', async () => {
@@ -134,5 +175,50 @@ describe('PATCH /api/notifications/:id/read', () => {
   it('returns 404 for an unknown id', async () => {
     const res = await request(app).patch('/api/notifications/does-not-exist/read');
     expect(res.status).toBe(404);
+  });
+});
+
+describe('near-turn re-check when the queue shifts (leave/serve)', () => {
+  // Regression test: notifyIfNearTurn used to only fire at join time, so
+  // students who moved into the threshold later (because someone ahead of
+  // them left or was served) never got pinged. queue.js now re-checks the
+  // whole remaining queue after every leave/serve.
+  it('notifies students who move into near-turn range after the front of the queue is served', async () => {
+    // svc-general seed: Liam (high, pos1), Maya (medium, pos2), Sofia (low, pos3).
+    // Serving Liam should shift Maya to pos1 and Sofia to pos2 — both now <= threshold.
+    const serveRes = await request(app).post('/api/queue/svc-general/serve');
+    expect(serveRes.status).toBe(200);
+
+    const notifRes = await request(app).get('/api/notifications?type=near_turn');
+    expect(notifRes.status).toBe(200);
+    const names = notifRes.body.notifications.map((n) => n.studentName);
+    expect(names).toContain('Maya Chen');
+    expect(names).toContain('Sofia Rossi');
+  });
+
+  it('notifies the remaining student who moves into range after someone leaves', async () => {
+    // svc-career seed has one student (Ethan Brooks). Add two more low-priority
+    // joiners so "New Student" lands at position 3 — outside the threshold.
+    await request(app).post('/api/queue/svc-career/join').send({
+      studentName: 'Buffer Student',
+      priority: 'low',
+    });
+    const joinRes = await request(app).post('/api/queue/svc-career/join').send({
+      studentName: 'New Student',
+      priority: 'low',
+    });
+    expect(joinRes.body.entry.position).toBe(3);
+
+    let notifRes = await request(app).get('/api/notifications?studentName=New Student&type=near_turn');
+    expect(notifRes.body.notifications).toHaveLength(0);
+
+    // Ethan leaves -> Buffer moves to pos1, New Student moves to pos2, within threshold.
+    const ethan = (await request(app).get('/api/queue/svc-career')).body.queue.find(
+      (e) => e.studentName === 'Ethan Brooks',
+    );
+    await request(app).delete(`/api/queue/svc-career/leave/${ethan.id}`);
+
+    notifRes = await request(app).get('/api/notifications?studentName=New Student&type=near_turn');
+    expect(notifRes.body.notifications).toHaveLength(1);
   });
 });

@@ -1,10 +1,15 @@
 const request = require('supertest');
 
+const { createFakeDb } = require('./testUtils/fakeDb');
+const mockDb = createFakeDb();
+jest.mock('../src/data/db', () => ({ pool: mockDb }));
+
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');
 
 beforeEach(() => {
   resetStore();
+  mockDb.reset();
 });
 
 describe('GET /api/queue', () => {

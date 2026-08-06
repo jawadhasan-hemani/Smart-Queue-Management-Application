@@ -1,42 +1,57 @@
 const express = require('express');
 
-const { notifications, services } = require('../data/store');
-const { addNotification } = require('../services/notificationService');
-const { validateNotificationInput } = require('../validators/notificationValidator');
+const { services } = require('../data/store');
+const notificationQueries = require('../data/notificationQueries');
+const { addNotification, markNotificationRead } = require('../services/notificationService');
+const {
+  validateNotificationInput,
+  validateNotificationQuery,
+} = require('../validators/notificationValidator');
 
 const router = express.Router();
 
-function sortedByNewest(list) {
-  return [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-}
-
-router.get('/', (req, res) => {
-  const { studentName } = req.query;
-  let list = notifications;
-
-  if (studentName !== undefined) {
-    if (typeof studentName !== 'string' || !studentName.trim()) {
-      return res.status(400).json({ errors: { studentName: 'studentName filter cannot be blank.' } });
-    }
-    const name = studentName.trim().toLowerCase();
-    list = list.filter((n) => n.studentName.toLowerCase() === name);
+router.get('/', async (req, res) => {
+  const { valid, errors } = validateNotificationQuery(req.query);
+  if (!valid) {
+    return res.status(400).json({ errors });
   }
 
-  res.status(200).json({ notifications: sortedByNewest(list) });
+  const { studentName, search, type } = req.query;
+  const rows = await notificationQueries.listNotifications({ studentName, search, type });
+  const notifications = rows.map((row) => ({
+    id: row.id,
+    studentName: row.student_name,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    type: row.type,
+    message: row.message,
+    read: row.status === 'viewed',
+    createdAt: row.created_at,
+  }));
+
+  res.status(200).json({ notifications });
 });
 
-router.get('/:id', (req, res) => {
-  const notification = notifications.find((n) => n.id === req.params.id);
-  if (!notification) {
+router.get('/:id', async (req, res) => {
+  const row = await notificationQueries.getNotificationById(req.params.id);
+  if (!row) {
     return res.status(404).json({ error: 'Notification not found.' });
   }
-  res.status(200).json({ notification });
+  res.status(200).json({
+    notification: {
+      id: row.id,
+      studentName: row.student_name,
+      serviceId: row.service_id,
+      serviceName: row.service_name,
+      type: row.type,
+      message: row.message,
+      read: row.status === 'viewed',
+      createdAt: row.created_at,
+    },
+  });
 });
 
-// Admin-triggered / manual notification (e.g. custom announcements).
-// System-generated notifications (joined/near_turn/served) are created
-// directly by the notificationService when queue events happen.
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { valid, errors } = validateNotificationInput(req.body);
   if (!valid) {
     return res.status(400).json({ errors });
@@ -47,7 +62,7 @@ router.post('/', (req, res) => {
     return res.status(404).json({ error: 'Service not found.' });
   }
 
-  const notification = addNotification({
+  const notification = await addNotification({
     studentName: req.body.studentName.trim(),
     serviceId: service.id,
     serviceName: service.name,
@@ -58,12 +73,11 @@ router.post('/', (req, res) => {
   res.status(201).json({ notification });
 });
 
-router.patch('/:id/read', (req, res) => {
-  const notification = notifications.find((n) => n.id === req.params.id);
+router.patch('/:id/read', async (req, res) => {
+  const notification = await markNotificationRead(req.params.id);
   if (!notification) {
     return res.status(404).json({ error: 'Notification not found.' });
   }
-  notification.read = true;
   res.status(200).json({ notification });
 });
 

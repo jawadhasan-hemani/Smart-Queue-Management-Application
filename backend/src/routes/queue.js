@@ -3,7 +3,7 @@ const { randomUUID } = require('crypto');
 
 const { services, queueEntries } = require('../data/store');
 const { validateJoinInput } = require('../validators/queueValidator');
-const { notifyJoin, notifyIfNearTurn, notifyServed } = require('../services/notificationService');
+const { notifyJoin, notifyIfNearTurn, notifyServed, notifyLeft } = require('../services/notificationService');
 const { recordHistory } = require('../services/historyService');
 
 const router = express.Router();
@@ -25,6 +25,25 @@ function withPositionAndWait(entries, service) {
     position: idx + 1,
     estimatedWaitMinutes: idx * duration,
   }));
+}
+
+// Re-checks near-turn status for everyone remaining in a service's queue.
+// Called after a leave/serve shifts positions, so students who move into
+// the threshold get pinged even though they didn't just join. Safe to call
+// on every shift because uq_notifications_near_turn_pending (schema.sql) no-ops
+// for anyone who already has an unread ping — this never spams duplicates.
+async function renotifyNearTurn(service) {
+  const withPosition = withPositionAndWait(orderedQueueFor(service.id), service);
+  await Promise.all(
+    withPosition.map((entry) =>
+      notifyIfNearTurn({
+        studentName: entry.studentName,
+        serviceId: service.id,
+        serviceName: service.name,
+        position: entry.position,
+      }),
+    ),
+  );
 }
 
 router.get('/', (req, res) => {
@@ -52,7 +71,7 @@ router.get('/:serviceId', (req, res) => {
   });
 });
 
-router.post('/:serviceId/join', (req, res) => {
+router.post('/:serviceId/join', async (req, res) => {
   const service = services.find((s) => s.id === req.params.serviceId);
   if (!service) {
     return res.status(404).json({ error: 'Service not found.' });
@@ -80,13 +99,13 @@ router.post('/:serviceId/join', (req, res) => {
   const withPosition = withPositionAndWait(orderedQueueFor(service.id), service);
   const placed = withPosition.find((e) => e.id === entry.id);
 
-  notifyJoin({
+  await notifyJoin({
     studentName: entry.studentName,
     serviceId: service.id,
     serviceName: service.name,
     position: placed.position,
   });
-  notifyIfNearTurn({
+  await notifyIfNearTurn({
     studentName: entry.studentName,
     serviceId: service.id,
     serviceName: service.name,
@@ -99,7 +118,7 @@ router.post('/:serviceId/join', (req, res) => {
   });
 });
 
-router.delete('/:serviceId/leave/:entryId', (req, res) => {
+router.delete('/:serviceId/leave/:entryId', async (req, res) => {
   const service = services.find((s) => s.id === req.params.serviceId);
   if (!service) {
     return res.status(404).json({ error: 'Service not found.' });
@@ -115,14 +134,29 @@ router.delete('/:serviceId/leave/:entryId', (req, res) => {
 
   const [removed] = queueEntries.splice(index, 1);
 
-  recordHistory({
+  await notifyLeft({
     studentName: removed.studentName,
     serviceId: service.id,
     serviceName: service.name,
-    priority: removed.priority,
-    joinedAt: removed.joinedAt,
-    status: 'left',
   });
+
+  try {
+    await recordHistory({
+      studentName: removed.studentName,
+      serviceId: service.id,
+      serviceName: service.name,
+      priority: removed.priority,
+      joinedAt: removed.joinedAt,
+      status: 'left',
+    });
+  } catch (err) {
+    if (err.code === 'DUPLICATE_HISTORY_ENTRY') {
+      return res.status(409).json({ error: err.message });
+    }
+    throw err;
+  }
+
+  await renotifyNearTurn(service);
 
   res.status(200).json({
     removed,
@@ -130,7 +164,7 @@ router.delete('/:serviceId/leave/:entryId', (req, res) => {
   });
 });
 
-router.post('/:serviceId/serve', (req, res) => {
+router.post('/:serviceId/serve', async (req, res) => {
   const service = services.find((s) => s.id === req.params.serviceId);
   if (!service) {
     return res.status(404).json({ error: 'Service not found.' });
@@ -145,19 +179,29 @@ router.post('/:serviceId/serve', (req, res) => {
   const index = queueEntries.findIndex((e) => e.id === next.id);
   queueEntries.splice(index, 1);
 
-  notifyServed({
+  await notifyServed({
     studentName: next.studentName,
     serviceId: service.id,
     serviceName: service.name,
   });
-  recordHistory({
-    studentName: next.studentName,
-    serviceId: service.id,
-    serviceName: service.name,
-    priority: next.priority,
-    joinedAt: next.joinedAt,
-    status: 'served',
-  });
+
+  try {
+    await recordHistory({
+      studentName: next.studentName,
+      serviceId: service.id,
+      serviceName: service.name,
+      priority: next.priority,
+      joinedAt: next.joinedAt,
+      status: 'served',
+    });
+  } catch (err) {
+    if (err.code === 'DUPLICATE_HISTORY_ENTRY') {
+      return res.status(409).json({ error: err.message });
+    }
+    throw err;
+  }
+
+  await renotifyNearTurn(service);
 
   res.status(200).json({
     served: next,

@@ -116,13 +116,18 @@ export function AppProvider({ children }) {
 
   const mapHistoryEntry = useCallback((entry) => ({
     id: entry.id,
+    studentName: entry.studentName,
+    serviceId: entry.serviceId,
     serviceName: entry.serviceName,
+    priority: entry.priority,
     date: new Date(entry.endedAt).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     }),
+    resolvedAt: new Date(entry.endedAt).getTime(),
     outcome: entry.status === "served" ? "Served" : "Left queue",
+    outcomeRaw: entry.status,
     waitMinutes: entry.waitedMinutes,
   }), [])
 

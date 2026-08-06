@@ -61,16 +61,12 @@ function seedQueue(services) {
 
 const services = seedServices();
 const queueEntries = seedQueue(services);
-const notifications = [];
-const historyEntries = [];
 
 function resetStore() {
   services.length = 0;
   services.push(...seedServices());
   queueEntries.length = 0;
   queueEntries.push(...seedQueue(services));
-  notifications.length = 0;
-  historyEntries.length = 0;
 }
 
-module.exports = { services, queueEntries, notifications, historyEntries, resetStore };
+module.exports = { services, queueEntries, resetStore };

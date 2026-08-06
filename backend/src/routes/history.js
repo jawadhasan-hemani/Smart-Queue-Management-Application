@@ -1,32 +1,64 @@
 const express = require('express');
 
-const { historyEntries } = require('../data/store');
+const historyQueries = require('../data/historyQueries');
+const { listHistory, getAverageWaitMinutes } = require('../services/historyService');
 const { validateHistoryQuery } = require('../validators/historyValidator');
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
+router.get('/summary', async (req, res) => {
   const { valid, errors } = validateHistoryQuery(req.query);
   if (!valid) {
     return res.status(400).json({ errors });
   }
 
-  let list = historyEntries;
-  if (req.query.studentName) {
-    const name = req.query.studentName.trim().toLowerCase();
-    list = list.filter((h) => h.studentName.toLowerCase() === name);
+  const { studentName, serviceId, status } = req.query;
+  let rows = await listHistory({ studentName });
+  if (serviceId) {
+    rows = rows.filter((h) => h.serviceId === serviceId);
   }
+  if (status) {
+    rows = rows.filter((h) => h.status === status);
+  }
+  const avgWaitMinutes = await getAverageWaitMinutes({ studentName, serviceId, status });
 
-  const sorted = [...list].sort((a, b) => new Date(b.endedAt) - new Date(a.endedAt));
-  res.status(200).json({ history: sorted });
+  res.status(200).json({
+    avgWaitMinutes,
+    totalVisits: rows.length,
+    served: rows.filter((h) => h.status === 'served').length,
+    left: rows.filter((h) => h.status === 'left').length,
+  });
 });
 
-router.get('/:id', (req, res) => {
-  const entry = historyEntries.find((h) => h.id === req.params.id);
-  if (!entry) {
+router.get('/', async (req, res) => {
+  const { valid, errors } = validateHistoryQuery(req.query);
+  if (!valid) {
+    return res.status(400).json({ errors });
+  }
+
+  const { studentName, search, sortBy } = req.query;
+  const history = await listHistory({ studentName, search, sortBy });
+  res.status(200).json({ history });
+});
+
+router.get('/:id', async (req, res) => {
+  const row = await historyQueries.getHistoryById(req.params.id);
+  if (!row) {
     return res.status(404).json({ error: 'History entry not found.' });
   }
-  res.status(200).json({ entry });
+  res.status(200).json({
+    entry: {
+      id: row.id,
+      studentName: row.student_name,
+      serviceId: row.service_id,
+      serviceName: row.service_name,
+      priority: row.priority,
+      status: row.status,
+      joinedAt: row.joined_at,
+      endedAt: row.ended_at,
+      waitedMinutes: row.waited_minutes,
+    },
+  });
 });
 
 module.exports = router;
