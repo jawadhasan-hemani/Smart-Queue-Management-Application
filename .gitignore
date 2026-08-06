@@ -3,3 +3,6 @@ z.sh
 backend/config/serviceAccountKey.json
 backend/config/serviceAccountKey.json.json
 notifications-history-module.zip
+.env
+schema.txt
+a4.txt

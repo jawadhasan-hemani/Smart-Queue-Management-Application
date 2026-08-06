@@ -12,6 +12,8 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 
 import { mockServices, mockQueues, mockHistory, mockNotifications } from "../mockData"
 
+const API_BASE = "/api"
+
 const priorityRank = { high: 0, medium: 1, low: 2 }
 
 let idCounter = 100
@@ -109,6 +111,78 @@ export function AppProvider({ children }) {
   const [history, setHistory] = useSharedState("qs_history", mockHistory)
   const [notifications, setNotifications] = useSharedState("qs_notifications", mockNotifications)
 
+  // --- Authenticated API helper ---
+  // Grabs a fresh Firebase token and makes a JSON request to the backend.
+  // Returns the parsed response or throws on non-2xx status.
+  const apiFetch = useCallback(async (path, options = {}) => {
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) }
+    try {
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers["Authorization"] = `Bearer ${token}`
+      }
+    } catch {
+      // continue without auth header if token retrieval fails
+    }
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw Object.assign(new Error(body.error || `API ${res.status}`), { status: res.status, body })
+    }
+    return res.json()
+  }, [])
+
+  // --- Load services from backend on mount ---
+  useEffect(() => {
+    apiFetch("/services")
+      .then((data) => {
+        if (data.services && data.services.length > 0) {
+          setServices(data.services.map((s) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            duration: s.duration,
+            priority: s.priority,
+            open: s.open,
+          })))
+        }
+      })
+      .catch((err) => console.error("Failed to load services from backend:", err))
+  }, [apiFetch])
+
+  // --- Load queue entries from backend on mount ---
+  useEffect(() => {
+    apiFetch("/queue")
+      .then((data) => {
+        if (data.summary) {
+          // For each service with entries, load the full queue
+          const promises = data.summary
+            .filter((s) => s.count > 0)
+            .map((s) =>
+              apiFetch(`/queue/${s.serviceId}`)
+                .then((qData) =>
+                  (qData.queue || []).map((entry) => ({
+                    id: entry.id,
+                    serviceId: s.serviceId,
+                    studentName: entry.studentName,
+                    joinedAt: new Date(entry.joinedAt).getTime(),
+                    priority: entry.priority || "medium",
+                  }))
+                )
+                .catch(() => [])
+            )
+          return Promise.all(promises).then((results) => {
+            const allEntries = results.flat()
+            if (allEntries.length > 0) {
+              setQueues(allEntries)
+            }
+          })
+        }
+      })
+      .catch((err) => console.error("Failed to load queues from backend:", err))
+  }, [apiFetch])
+
   // --- Backend integration: History & Notification modules ---
   // Pulls real data from the backend (falls back to whatever is already in
   // shared/local state — the mock seed — if the request fails, so the UI
@@ -145,16 +219,14 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const query = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
 
-    fetch(`/api/history${query}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    apiFetch(`/history${query}`)
       .then((data) => setHistory(data.history.map(mapHistoryEntry)))
       .catch((err) => console.error("Failed to load history from backend:", err))
 
-    fetch(`/api/notifications${query}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    apiFetch(`/notifications${query}`)
       .then((data) => setNotifications(data.notifications.map(mapNotification)))
       .catch((err) => console.error("Failed to load notifications from backend:", err))
-  }, [user?.name, mapHistoryEntry, mapNotification])
+  }, [user?.name, mapHistoryEntry, mapNotification, apiFetch])
 
   // Per-device notification preferences (not shared across tabs/users on purpose)
   const [muteToasts, setMuteToastsState] = useState(() => {
@@ -250,20 +322,82 @@ export function AppProvider({ children }) {
   }, [setAdmins])
 
   const saveService = useCallback(
-    (service) => {
-      setServices((prev) => {
-        if (service.id && prev.some((s) => s.id === service.id)) {
-          return prev.map((s) => (s.id === service.id ? { ...service } : s))
+    async (service) => {
+      // Optimistic local update first
+      const isUpdate = service.id && services.some((s) => s.id === service.id)
+      const tempId = nextId("svc")
+
+      if (isUpdate) {
+        setServices((prev) => prev.map((s) => (s.id === service.id ? { ...service } : s)))
+      } else {
+        setServices((prev) => [...prev, { ...service, id: tempId }])
+      }
+
+      try {
+        if (isUpdate) {
+          const data = await apiFetch(`/services/${service.id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              name: service.name,
+              description: service.description,
+              duration: service.duration,
+              priority: service.priority,
+              open: service.open,
+            }),
+          })
+          if (data.service) {
+            setServices((prev) =>
+              prev.map((s) => (s.id === service.id ? { ...data.service } : s))
+            )
+          }
+        } else {
+          const data = await apiFetch("/services", {
+            method: "POST",
+            body: JSON.stringify({
+              name: service.name,
+              description: service.description,
+              duration: service.duration,
+              priority: service.priority,
+              open: service.open ?? true,
+            }),
+          })
+          if (data.service) {
+            // Replace the temp-id entry with the real one from the backend
+            setServices((prev) =>
+              prev.map((s) => (s.id === tempId ? { ...data.service } : s))
+            )
+          }
         }
-        return [...prev, { ...service, id: nextId("svc") }]
-      })
+      } catch (err) {
+        console.error("Failed to save service to backend:", err)
+        // Keep the optimistic update — the UI stays consistent
+      }
     },
-    [],
+    [services, apiFetch],
   )
 
-  const toggleServiceOpen = useCallback((id) => {
+  const toggleServiceOpen = useCallback(async (id) => {
+    const current = services.find((s) => s.id === id)
+    if (!current) return
+
+    // Optimistic update
     setServices((prev) => prev.map((s) => (s.id === id ? { ...s, open: !s.open } : s)))
-  }, [])
+
+    try {
+      await apiFetch(`/services/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: current.name,
+          description: current.description,
+          duration: current.duration,
+          priority: current.priority,
+          open: !current.open,
+        }),
+      })
+    } catch (err) {
+      console.error("Failed to toggle service open status:", err)
+    }
+  }, [services, apiFetch])
 
   const orderedQueue = useCallback(
     (serviceId) =>
@@ -312,15 +446,18 @@ export function AppProvider({ children }) {
   }, [currentPosition, pushNotification])
 
   const joinQueue = useCallback(
-    (serviceId) => {
+    async (serviceId) => {
       if (!user) return
       const svc = services.find((s) => s.id === serviceId)
+      const tempId = nextId("q")
+
+      // Optimistic local insert
       setQueues((prev) => {
         const filtered = prev.filter((q) => q.studentName !== user.name)
         return [
           ...filtered,
           {
-            id: nextId("q"),
+            id: tempId,
             serviceId,
             studentName: user.name,
             joinedAt: Date.now(),
@@ -333,37 +470,91 @@ export function AppProvider({ children }) {
         body: `You're in line for ${svc?.name ?? "a service"}. We'll alert you as your turn nears.`,
         tone: "success",
       })
+
+      try {
+        const data = await apiFetch(`/queue/${serviceId}/join`, {
+          method: "POST",
+          body: JSON.stringify({
+            studentName: user.name,
+            priority: "medium",
+          }),
+        })
+        if (data.entry) {
+          // Replace temp entry with the real one
+          setQueues((prev) =>
+            prev.map((q) =>
+              q.id === tempId
+                ? {
+                    id: data.entry.id,
+                    serviceId,
+                    studentName: data.entry.studentName,
+                    joinedAt: data.entry.joinedAt ? new Date(data.entry.joinedAt).getTime() : Date.now(),
+                    priority: data.entry.priority || "medium",
+                  }
+                : q
+            )
+          )
+        }
+      } catch (err) {
+        console.error("Failed to join queue via backend:", err)
+      }
     },
-    [user, services, pushNotification],
+    [user, services, pushNotification, apiFetch],
   )
 
-  const leaveQueue = useCallback(() => {
+  const leaveQueue = useCallback(async () => {
     if (!user) return
+    const entry = queues.find((q) => q.studentName === user.name)
+
+    // Optimistic local removal
     setQueues((prev) => prev.filter((q) => q.studentName !== user.name))
     pushNotification({
       title: "Left the queue",
       body: "You've been removed from the line. You can rejoin any time.",
       tone: "info",
     })
-  }, [user, pushNotification])
+
+    if (entry) {
+      try {
+        await apiFetch(`/queue/${entry.serviceId}/leave/${entry.id}`, {
+          method: "DELETE",
+        })
+      } catch (err) {
+        console.error("Failed to leave queue via backend:", err)
+      }
+    }
+  }, [user, queues, pushNotification, apiFetch])
 
   const serveNext = useCallback(
-    (serviceId) => {
+    async (serviceId) => {
       const ordered = orderedQueue(serviceId)
       const next = ordered[0]
       if (!next) return
+
+      // Optimistic local removal
       setQueues((prev) => prev.filter((q) => q.id !== next.id))
       pushNotification({
         title: "Now serving",
         body: `${next.studentName} is now being served.`,
         tone: "success",
       })
+
+      try {
+        await apiFetch(`/queue/${serviceId}/serve`, {
+          method: "POST",
+        })
+      } catch (err) {
+        console.error("Failed to serve next via backend:", err)
+      }
     },
-    [orderedQueue, pushNotification],
+    [orderedQueue, pushNotification, apiFetch],
   )
 
   const removeEntry = useCallback(
-    (entryId) => {
+    async (entryId) => {
+      const entry = queues.find((q) => q.id === entryId)
+
+      // Optimistic local removal
       setQueues((prev) => {
         const removed = prev.find((q) => q.id === entryId)
         if (removed && user && removed.studentName === user.name) {
@@ -376,8 +567,18 @@ export function AppProvider({ children }) {
         }
         return prev.filter((q) => q.id !== entryId)
       })
+
+      if (entry) {
+        try {
+          await apiFetch(`/queue/${entry.serviceId}/leave/${entryId}`, {
+            method: "DELETE",
+          })
+        } catch (err) {
+          console.error("Failed to remove entry via backend:", err)
+        }
+      }
     },
-    [user, services, pushNotification],
+    [user, queues, services, pushNotification, apiFetch],
   )
 
   const moveEntry = useCallback(
@@ -407,13 +608,13 @@ export function AppProvider({ children }) {
     setNotifications((prev) => {
       const unreadIds = prev.filter((n) => !n.read).map((n) => n.id)
       unreadIds.forEach((id) => {
-        fetch(`/api/notifications/${id}/read`, { method: "PATCH" }).catch((err) =>
+        apiFetch(`/notifications/${id}/read`, { method: "PATCH" }).catch((err) =>
           console.error("Failed to mark notification read on backend:", err),
         )
       })
       return prev.map((n) => ({ ...n, read: true }))
     })
-  }, [])
+  }, [apiFetch])
 
   const clearNotifications = useCallback(() => {
     setNotifications([])

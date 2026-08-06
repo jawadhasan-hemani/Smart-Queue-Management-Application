@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, LogOut, Search, XCircle } from "lucide-react"
 import { useApp } from "../../components/AppContext"
 import { Badge } from "../../components/ui/badge"
 import { Card, CardContent } from "../../components/ui/card"
+import { Select } from "../../components/ui/select"
 
 const outcomeConfig = {
   Served: { tone: "success", Icon: CheckCircle2 },
@@ -84,17 +85,18 @@ export function History() {
           ))}
         </div>
         <div className="flex gap-2">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-          >
-            {sortOptions.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <div className="w-36">
+            <Select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              {sortOptions.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div className="relative sm:w-56">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input

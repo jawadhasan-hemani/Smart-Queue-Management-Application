@@ -1,5 +1,5 @@
 const admin = require('../config/firebase');
-const { usersStore } = require('../data/users');
+const userQueries = require('../src/db/userQueries');
 
 // Middleware to verify Firebase ID Token
 const verifyFirebaseToken = async (req, res, next) => {
@@ -19,12 +19,12 @@ const verifyFirebaseToken = async (req, res, next) => {
   try {
     // Verify token with Firebase Admin
     const decodedToken = await admin.auth().verifyIdToken(token);
-    
+
     // Attach Firebase UID and decoded info to request
     req.user = decodedToken;
-    
-    // Look up the user in our in-memory store to attach role if exists
-    const localUser = usersStore[decodedToken.uid];
+
+    // Look up the user in the database to attach role
+    const localUser = await userQueries.findUserByFirebaseUid(decodedToken.uid);
     if (localUser) {
       req.user.role = localUser.role;
     } else {

@@ -1,3 +1,8 @@
+jest.mock('../config/db', () => ({
+  query: jest.fn(),
+  pool: { query: jest.fn() },
+}));
+
 const request = require('supertest');
 
 const app = require('../src/app');

@@ -6,6 +6,8 @@ const { validateServiceInput } = require('../validators/serviceValidator');
 
 const router = express.Router();
 
+const { verifyFirebaseToken, authorize } = require('../../middleware/authMiddleware');
+
 router.get('/', (req, res) => {
   res.status(200).json({ services });
 });
@@ -18,7 +20,7 @@ router.get('/:id', (req, res) => {
   res.status(200).json({ service });
 });
 
-router.post('/', (req, res) => {
+router.post('/', verifyFirebaseToken, authorize('admin'), (req, res) => {
   const { valid, errors } = validateServiceInput(req.body);
   if (!valid) {
     return res.status(400).json({ errors });
@@ -40,7 +42,7 @@ router.post('/', (req, res) => {
   res.status(201).json({ service });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', verifyFirebaseToken, authorize('admin'), (req, res) => {
   const service = services.find((s) => s.id === req.params.id);
   if (!service) {
     return res.status(404).json({ error: 'Service not found.' });

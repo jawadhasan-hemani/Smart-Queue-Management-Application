@@ -26,6 +26,7 @@ function withPositionAndWait(entries, service) {
     estimatedWaitMinutes: idx * duration,
   }));
 }
+const { verifyFirebaseToken, authorize } = require('../../middleware/authMiddleware');
 
 router.get('/', (req, res) => {
   const summary = services.map((s) => ({
@@ -130,7 +131,7 @@ router.delete('/:serviceId/leave/:entryId', (req, res) => {
   });
 });
 
-router.post('/:serviceId/serve', (req, res) => {
+router.post('/:serviceId/serve', verifyFirebaseToken, authorize('admin'), (req, res) => {
   const service = services.find((s) => s.id === req.params.serviceId);
   if (!service) {
     return res.status(404).json({ error: 'Service not found.' });
