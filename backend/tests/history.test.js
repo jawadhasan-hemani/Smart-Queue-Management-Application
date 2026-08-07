@@ -1,8 +1,13 @@
+jest.mock('../config/db', () => ({
+  query: jest.fn(),
+  pool: { query: jest.fn() },
+}));
+
 const request = require('supertest');
 
 const { createFakeDb } = require('./testUtils/fakeDb');
 const mockDb = createFakeDb();
-jest.mock('../src/data/db', () => ({ pool: mockDb }));
+jest.mock('../config/db', () => ({ pool: mockDb, query: mockDb.query }));
 
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');

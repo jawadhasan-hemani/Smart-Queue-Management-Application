@@ -1,3 +1,16 @@
+jest.mock('../config/db', () => ({
+  query: jest.fn(),
+  pool: { query: jest.fn() },
+}));
+
+jest.mock('../middleware/authMiddleware', () => ({
+  verifyFirebaseToken: (req, res, next) => {
+    req.user = { uid: 'test-admin', role: 'admin' };
+    next();
+  },
+  authorize: () => (req, res, next) => next(),
+}));
+
 const request = require('supertest');
 
 const app = require('../src/app');

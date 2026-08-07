@@ -1,4 +1,4 @@
-const historyQueries = require('../data/historyQueries');
+const historyQueries = require('../db/historyQueries');
 
 function mapHistoryEntry(row) {
   return {

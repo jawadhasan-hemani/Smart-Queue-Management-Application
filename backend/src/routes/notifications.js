@@ -1,7 +1,7 @@
 const express = require('express');
 
 const { services } = require('../data/store');
-const notificationQueries = require('../data/notificationQueries');
+const notificationQueries = require('../db/notificationQueries');
 const { addNotification, markNotificationRead } = require('../services/notificationService');
 const {
   validateNotificationInput,

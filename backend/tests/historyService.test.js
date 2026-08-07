@@ -1,6 +1,6 @@
 const { pool, resetMockPool } = require('./testUtils/mockPool');
 
-jest.mock('../src/data/db', () => ({ pool: require('./testUtils/mockPool').pool }));
+jest.mock('../config/db', () => { const { pool } = require('./testUtils/mockPool'); return { pool, query: pool.query }; });
 
 const { recordHistory } = require('../src/services/historyService');
 
