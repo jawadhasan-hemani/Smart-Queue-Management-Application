@@ -1,5 +1,3 @@
-
-Services.test · JS
 jest.mock('../middleware/authMiddleware', () => ({
   verifyFirebaseToken: (req, res, next) => {
     req.user = { uid: 'test-admin', role: 'admin' };
