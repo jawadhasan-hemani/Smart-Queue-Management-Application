@@ -311,8 +311,10 @@ export function AppProvider({ children }) {
     const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp-" + Date.now())
     const { getAuth } = await import("firebase/auth");
     const secAuth = getAuth(secondaryApp);
+    
     try {
-      await createUserWithEmailAndPassword(secAuth, email, "QueueSmart2026!")
+      const adminPassword = process.env.REACT_APP_ADMIN_PASSWORD || "QueueSmart2026!";
+      await createUserWithEmailAndPassword(secAuth, email, adminPassword)
     } catch (err) {
       if (err.code !== "auth/email-already-in-use") {
         throw err;
