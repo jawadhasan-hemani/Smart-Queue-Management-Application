@@ -1,11 +1,62 @@
 function createFakeDb() {
   let notifications = [];
   let history = [];
+  let services = [];
   let notifSeq = 0;
   let histSeq = 0;
+  let svcSeq = 0;
 
   async function query(sql, values = []) {
     const text = sql.replace(/\s+/g, ' ').trim();
+
+    if (text.startsWith('INSERT INTO services')) {
+      const [name, description, duration, priority, open] = values;
+      const now = new Date(Date.now() + svcSeq).toISOString();
+      const row = {
+        id: `svc-fake-${++svcSeq}`,
+        name,
+        description,
+        duration,
+        priority,
+        open,
+        created_at: now,
+        updated_at: now,
+      };
+      services.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.startsWith('SELECT * FROM services WHERE id')) {
+      const row = services.find((s) => s.id === values[0]) || null;
+      return { rows: row ? [row] : [] };
+    }
+
+    if (text.startsWith('SELECT * FROM services')) {
+      const list = [...services].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return { rows: list };
+    }
+
+    if (text.startsWith('UPDATE services SET')) {
+      const id = values[values.length - 1]; // last param is always the WHERE id
+      const setValues = values.slice(0, -1); // remaining params, in SET clause order
+      const service = services.find((s) => s.id === id);
+      if (!service) return { rows: [] };
+
+      const setClauseMatch = text.match(/SET (.+) WHERE/);
+      const assignments = setClauseMatch[1].split(',').map((s) => s.trim());
+
+      let vi = 0;
+      assignments.forEach((assign) => {
+        const col = assign.split('=')[0].trim();
+        if (assign.includes('NOW()')) {
+          service.updated_at = new Date().toISOString();
+        } else {
+          service[col] = setValues[vi++];
+        }
+      });
+
+      return { rows: [{ ...service }] };
+    }
 
     if (text.startsWith('INSERT INTO notifications')) {
       const [userId, studentName, serviceId, serviceName, type, message] = values;
@@ -118,8 +169,10 @@ function createFakeDb() {
   function reset() {
     notifications = [];
     history = [];
+    services = [];
     notifSeq = 0;
     histSeq = 0;
+    svcSeq = 0;
   }
 
   return { query, reset };
