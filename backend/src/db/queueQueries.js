@@ -50,7 +50,9 @@ async function addQueueEntry(queueId, userId, studentName, priority = 'medium') 
     [queueId, userId, studentName, priority],
   );
   await updateEntryPositions(queueId);
-  return result.rows[0];
+  const updated = await query(`SELECT * FROM queue_entries WHERE id = $1`, [result.rows[0].id]);
+  const row = updated.rows[0];
+  return { ...row, position: Number(row.position) };
 }
 
 async function removeQueueEntry(entryId) {

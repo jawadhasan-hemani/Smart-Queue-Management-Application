@@ -20,9 +20,15 @@ jest.mock('../config/db', () => ({ pool: mockDb, query: mockDb.query }));
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');
 
-beforeEach(() => {
+beforeEach(async () => {
   resetStore();
   mockDb.reset();
+  await mockDb.query('INSERT INTO services (name, description, duration, priority, open) VALUES ($1, $2, $3, $4, $5)', [
+    'General Advising', 'd', 12, 'medium', true,
+  ]).then(res => { res.rows[0].id = 'svc-general'; });
+  await mockDb.query('INSERT INTO services (name, description, duration, priority, open) VALUES ($1, $2, $3, $4, $5)', [
+    'Career', 'd', 20, 'low', true,
+  ]).then(res => { res.rows[0].id = 'svc-career'; });
 });
 
 describe('GET /api/notifications', () => {
@@ -192,13 +198,14 @@ describe('PATCH /api/notifications/:id/read', () => {
 });
 
 describe('near-turn re-check when the queue shifts (leave/serve)', () => {
-  // Regression test: notifyIfNearTurn used to only fire at join time, so
-  // students who moved into the threshold later (because someone ahead of
-  // them left or was served) never got pinged. queue.js now re-checks the
-  // whole remaining queue after every leave/serve.
   it('notifies students who move into near-turn range after the front of the queue is served', async () => {
-    // svc-general seed: Liam (high, pos1), Maya (medium, pos2), Sofia (low, pos3).
-    // Serving Liam should shift Maya to pos1 and Sofia to pos2 — both now <= threshold.
+    await mockDb.query('INSERT INTO queues (service_id) VALUES ($1)', ['svc-general']);
+    const qRes = await mockDb.query('SELECT * FROM queues WHERE service_id = $1', ['svc-general']);
+    const qid = qRes.rows[0].id;
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Maya Chen', 'medium']);
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Liam Okafor', 'high']);
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Sofia Rossi', 'low']);
+
     const serveRes = await request(app).post('/api/queue/svc-general/serve');
     expect(serveRes.status).toBe(200);
 
@@ -210,28 +217,34 @@ describe('near-turn re-check when the queue shifts (leave/serve)', () => {
   });
 
   it('notifies the remaining student who moves into range after someone leaves', async () => {
-    // svc-career seed has one student (Ethan Brooks). Add two more low-priority
-    // joiners so "New Student" lands at position 3 — outside the threshold.
-    await request(app).post('/api/queue/svc-career/join').send({
-      studentName: 'Buffer Student',
-      priority: 'low',
-    });
-    const joinRes = await request(app).post('/api/queue/svc-career/join').send({
+    await mockDb.query('INSERT INTO queues (service_id) VALUES ($1)', ['svc-general']);
+    const qRes = await mockDb.query('SELECT * FROM queues WHERE service_id = $1', ['svc-general']);
+    const qid = qRes.rows[0].id;
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Maya Chen', 'medium']);
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Liam Okafor', 'high']);
+    await mockDb.query('INSERT INTO queue_entries (queue_id, user_id, student_name, priority) VALUES ($1, $2, $3, $4)', [qid, null, 'Sofia Rossi', 'low']);
+
+    const joinRes = await request(app).post('/api/queue/svc-general/join').send({
       studentName: 'New Student',
       priority: 'low',
     });
-    expect(joinRes.body.entry.position).toBe(3);
+    expect(joinRes.body.entry.position).toBe(4);
 
     let notifRes = await request(app).get('/api/notifications?studentName=New Student&type=near_turn');
     expect(notifRes.body.notifications).toHaveLength(0);
 
-    // Ethan leaves -> Buffer moves to pos1, New Student moves to pos2, within threshold.
-    const ethan = (await request(app).get('/api/queue/svc-career')).body.queue.find(
-      (e) => e.studentName === 'Ethan Brooks',
-    );
-    await request(app).delete(`/api/queue/svc-career/leave/${ethan.id}`);
+    const getRes = await request(app).get('/api/queue/svc-general');
+    const liam = getRes.body.queue.find((e) => e.student_name === 'Liam Okafor');
+    await request(app).delete(`/api/queue/svc-general/leave/${liam.id}`);
+
+    notifRes = await request(app).get('/api/notifications?studentName=New Student&type=near_turn');
+    expect(notifRes.body.notifications).toHaveLength(0);
+
+    const maya = getRes.body.queue.find((e) => e.student_name === 'Maya Chen');
+    await request(app).delete(`/api/queue/svc-general/leave/${maya.id}`);
 
     notifRes = await request(app).get('/api/notifications?studentName=New Student&type=near_turn');
     expect(notifRes.body.notifications).toHaveLength(1);
+    expect(notifRes.body.notifications[0].message).toMatch(/almost/i);
   });
 });

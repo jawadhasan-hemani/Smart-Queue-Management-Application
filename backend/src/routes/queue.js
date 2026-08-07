@@ -3,6 +3,22 @@ const express = require('express');
 const queueQueries = require('../db/queueQueries');
 const serviceQueries = require('../db/serviceQueries');
 const { validateJoinInput } = require('../validators/queueValidator');
+const { notifyJoin, notifyLeft, notifyServed, notifyIfNearTurn } = require('../services/notificationService');
+const { recordHistory } = require('../services/historyService');
+
+async function renotifyNearTurn(service, queueId) {
+  const entries = await queueQueries.getQueueEntries(queueId);
+  await Promise.all(
+    entries.map((entry) =>
+      notifyIfNearTurn({
+        studentName: entry.student_name,
+        serviceId: service.id,
+        serviceName: service.name,
+        position: Number(entry.position),
+      })
+    )
+  );
+}
 
 const router = express.Router();
 
@@ -67,6 +83,19 @@ router.post('/:serviceId/join', async (req, res) => {
       req.body.priority || 'medium',
     );
 
+    await notifyJoin({
+      studentName: entry.student_name,
+      serviceId: service.id,
+      serviceName: service.name,
+      position: Number(entry.position),
+    });
+    await notifyIfNearTurn({
+      studentName: entry.student_name,
+      serviceId: service.id,
+      serviceName: service.name,
+      position: Number(entry.position),
+    });
+
     res.status(201).json({ entry });
   } catch (err) {
     console.error(err);
@@ -79,6 +108,34 @@ router.delete('/:serviceId/leave/:entryId', async (req, res) => {
     const removed = await queueQueries.removeQueueEntry(req.params.entryId);
     if (!removed) {
       return res.status(404).json({ error: 'Queue entry not found.' });
+    }
+
+    const service = await serviceQueries.getServiceById(req.params.serviceId);
+
+    await notifyLeft({
+      studentName: removed.student_name,
+      serviceId: req.params.serviceId,
+      serviceName: service ? service.name : 'Unknown',
+    });
+
+    try {
+      await recordHistory({
+        studentName: removed.student_name,
+        serviceId: req.params.serviceId,
+        serviceName: service ? service.name : 'Unknown',
+        priority: removed.priority,
+        joinedAt: new Date(removed.joined_at).getTime(),
+        status: 'left',
+      });
+    } catch (err) {
+      if (err.code === 'DUPLICATE_HISTORY_ENTRY') {
+        return res.status(409).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    if (service) {
+      await renotifyNearTurn(service, removed.queue_id);
     }
 
     res.status(200).json({ removed });
@@ -100,6 +157,30 @@ router.post('/:serviceId/serve', async (req, res) => {
     if (!served) {
       return res.status(404).json({ error: 'Queue is empty.' });
     }
+
+    await notifyServed({
+      studentName: served.student_name,
+      serviceId: service.id,
+      serviceName: service.name,
+    });
+
+    try {
+      await recordHistory({
+        studentName: served.student_name,
+        serviceId: service.id,
+        serviceName: service.name,
+        priority: served.priority,
+        joinedAt: new Date(served.joined_at).getTime(),
+        status: 'served',
+      });
+    } catch (err) {
+      if (err.code === 'DUPLICATE_HISTORY_ENTRY') {
+        return res.status(409).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    await renotifyNearTurn(service, queue.id);
 
     res.status(200).json({ served });
   } catch (err) {
