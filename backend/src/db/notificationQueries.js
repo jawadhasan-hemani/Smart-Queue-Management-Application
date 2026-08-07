@@ -1,29 +1,47 @@
 const { query } = require('../../config/db');
 
-/** Insert a notification and return it. */
-async function insertNotification(userId, studentName, serviceId, serviceName, type, message) {
+async function insertNotification({ userId = null, studentName, serviceId, serviceName, type, message }) {
   const sql = `
     INSERT INTO notifications (user_id, student_name, service_id, service_name, type, message, status)
     VALUES ($1, $2, $3, $4, $5, $6, 'sent')
     RETURNING *;
   `;
-  const { rows } = await query(sql, [userId, studentName, serviceId, serviceName, type, message]);
-  return rows[0];
+  try {
+    const { rows } = await query(sql, [userId, studentName, serviceId, serviceName, type, message]);
+    return rows[0];
+  } catch (err) {
+    if (err.code === '23505') {
+      return null;
+    }
+    throw err;
+  }
 }
 
-/** Get all notifications, optionally filtered by studentName. Newest first. */
-async function getAllNotifications(studentName) {
+/** Get all notifications, optionally filtered. Newest first. */
+async function listNotifications({ studentName, search, type } = {}) {
+  let sql = 'SELECT * FROM notifications';
+  const params = [];
+  const conditions = [];
+
   if (studentName) {
-    const sql = `
-      SELECT * FROM notifications
-      WHERE LOWER(student_name) = LOWER($1)
-      ORDER BY created_at DESC;
-    `;
-    const { rows } = await query(sql, [studentName.trim()]);
-    return rows;
+    params.push(studentName.trim());
+    conditions.push(`LOWER(student_name) = LOWER($${params.length})`);
   }
-  const sql = 'SELECT * FROM notifications ORDER BY created_at DESC';
-  const { rows } = await query(sql);
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`message ILIKE $${params.length}`);
+  }
+  if (type) {
+    params.push(type);
+    conditions.push(`type = $${params.length}`);
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  sql += ' ORDER BY created_at DESC';
+  const { rows } = await query(sql, params);
   return rows;
 }
 
@@ -42,7 +60,7 @@ async function getNotificationById(id) {
 }
 
 /** Mark a notification as viewed. */
-async function markAsViewed(id) {
+async function markNotificationRead(id) {
   const sql = `
     UPDATE notifications
     SET status = 'viewed'
@@ -55,8 +73,8 @@ async function markAsViewed(id) {
 
 module.exports = {
   insertNotification,
-  getAllNotifications,
+  listNotifications,
   getNotificationsByUserId,
   getNotificationById,
-  markAsViewed,
+  markNotificationRead,
 };

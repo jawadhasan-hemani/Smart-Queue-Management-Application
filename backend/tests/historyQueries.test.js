@@ -1,13 +1,13 @@
 const { pool, resetMockPool } = require('./testUtils/mockPool');
 
-jest.mock('../src/data/db', () => ({ pool: require('./testUtils/mockPool').pool }));
+jest.mock('../config/db', () => { const { pool } = require('./testUtils/mockPool'); return { pool, query: pool.query }; });
 
 const {
   insertHistoryEntry,
   listHistory,
   getHistoryById,
   getAverageWaitMinutes,
-} = require('../src/data/historyQueries');
+} = require('../src/db/historyQueries');
 
 beforeEach(() => {
   resetMockPool();

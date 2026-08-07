@@ -1,3 +1,11 @@
+jest.mock('../middleware/authMiddleware', () => ({
+  verifyFirebaseToken: (req, res, next) => {
+    req.user = { uid: 'test-admin', role: 'admin' };
+    next();
+  },
+  authorize: () => (req, res, next) => next(),
+}));
+
 jest.mock('../config/db', () => ({
   query: jest.fn(),
   pool: { query: jest.fn() },
@@ -7,7 +15,7 @@ const request = require('supertest');
 
 const { createFakeDb } = require('./testUtils/fakeDb');
 const mockDb = createFakeDb();
-jest.mock('../src/data/db', () => ({ pool: mockDb }));
+jest.mock('../config/db', () => ({ pool: mockDb, query: mockDb.query }));
 
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');

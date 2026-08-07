@@ -1,6 +1,6 @@
 const express = require('express');
 
-const historyQueries = require('../data/historyQueries');
+const historyQueries = require('../db/historyQueries');
 const { listHistory, getAverageWaitMinutes } = require('../services/historyService');
 const { validateHistoryQuery } = require('../validators/historyValidator');
 

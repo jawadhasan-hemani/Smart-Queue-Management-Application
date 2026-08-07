@@ -1,13 +1,13 @@
 const { pool, resetMockPool } = require('./testUtils/mockPool');
 
-jest.mock('../src/data/db', () => ({ pool: require('./testUtils/mockPool').pool }));
+jest.mock('../config/db', () => { const { pool } = require('./testUtils/mockPool'); return { pool, query: pool.query }; });
 
 const {
   insertNotification,
   listNotifications,
   getNotificationById,
   markNotificationRead,
-} = require('../src/data/notificationQueries');
+} = require('../src/db/notificationQueries');
 
 beforeEach(() => {
   resetMockPool();

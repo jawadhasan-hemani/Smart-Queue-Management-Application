@@ -1,4 +1,4 @@
-const notificationQueries = require('../data/notificationQueries');
+const notificationQueries = require('../db/notificationQueries');
 
 const NEAR_TURN_THRESHOLD = 2;
 
