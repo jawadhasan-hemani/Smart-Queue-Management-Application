@@ -5,12 +5,17 @@ jest.mock('../config/db', () => ({
 
 const request = require('supertest');
 
+const { createFakeDb } = require('./testUtils/fakeDb');
+const mockDb = createFakeDb();
+jest.mock('../src/data/db', () => ({ pool: mockDb }));
+
 const app = require('../src/app');
 const { services, resetStore } = require('../src/data/store');
 const { recordHistory } = require('../src/services/historyService');
 
 beforeEach(() => {
   resetStore();
+  mockDb.reset();
 });
 
 describe('GET /api/history', () => {
@@ -21,7 +26,7 @@ describe('GET /api/history', () => {
   });
 
   it('reflects entries recorded through the service layer, most recent first', async () => {
-    recordHistory({
+    await recordHistory({
       studentName: 'Older',
       serviceId: services[0].id,
       serviceName: services[0].name,
@@ -30,7 +35,7 @@ describe('GET /api/history', () => {
       status: 'served',
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    recordHistory({
+    await recordHistory({
       studentName: 'Newer',
       serviceId: services[0].id,
       serviceName: services[0].name,
@@ -46,7 +51,7 @@ describe('GET /api/history', () => {
   });
 
   it('filters by studentName', async () => {
-    recordHistory({
+    await recordHistory({
       studentName: 'Alice',
       serviceId: services[0].id,
       serviceName: services[0].name,
@@ -54,7 +59,7 @@ describe('GET /api/history', () => {
       joinedAt: Date.now(),
       status: 'served',
     });
-    recordHistory({
+    await recordHistory({
       studentName: 'Bob',
       serviceId: services[0].id,
       serviceName: services[0].name,
@@ -69,6 +74,59 @@ describe('GET /api/history', () => {
     expect(res.body.history[0].studentName).toBe('Alice');
   });
 
+  it('filters by search text matching the service name', async () => {
+    await recordHistory({
+      studentName: 'Alice',
+      serviceId: services[0].id,
+      serviceName: 'Academic Advising',
+      priority: 'medium',
+      joinedAt: Date.now(),
+      status: 'served',
+    });
+    await recordHistory({
+      studentName: 'Bob',
+      serviceId: services[0].id,
+      serviceName: 'Financial Aid',
+      priority: 'medium',
+      joinedAt: Date.now(),
+      status: 'served',
+    });
+
+    const res = await request(app).get('/api/history').query({ search: 'Advising' });
+    expect(res.status).toBe(200);
+    expect(res.body.history.length).toBe(1);
+    expect(res.body.history[0].studentName).toBe('Alice');
+  });
+
+  it('sorts by wait time descending when sortBy=wait-desc', async () => {
+    await recordHistory({
+      studentName: 'ShortWait',
+      serviceId: services[0].id,
+      serviceName: services[0].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 1_000,
+      status: 'served',
+    });
+    await recordHistory({
+      studentName: 'LongWait',
+      serviceId: services[0].id,
+      serviceName: services[0].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 20 * 60_000,
+      status: 'served',
+    });
+
+    const res = await request(app).get('/api/history').query({ sortBy: 'wait-desc' });
+    expect(res.status).toBe(200);
+    expect(res.body.history[0].studentName).toBe('LongWait');
+  });
+
+  it('rejects an invalid sortBy value', async () => {
+    const res = await request(app).get('/api/history').query({ sortBy: 'not-a-sort' });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.sortBy).toBeDefined();
+  });
+
   it('rejects a blank studentName filter', async () => {
     const res = await request(app).get('/api/history').query({ studentName: '   ' });
     expect(res.status).toBe(400);
@@ -80,9 +138,66 @@ describe('GET /api/history', () => {
   });
 });
 
+describe('GET /api/history/summary', () => {
+  it('returns zeroed summary when there is no history yet', async () => {
+    const res = await request(app).get('/api/history/summary');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ avgWaitMinutes: 0, totalVisits: 0, served: 0, left: 0 });
+  });
+
+  it('aggregates avgWaitMinutes, totalVisits, served, and left', async () => {
+    await recordHistory({
+      studentName: 'Alice',
+      serviceId: services[0].id,
+      serviceName: services[0].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 10 * 60_000,
+      status: 'served',
+    });
+    await recordHistory({
+      studentName: 'Bob',
+      serviceId: services[0].id,
+      serviceName: services[0].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 20 * 60_000,
+      status: 'left',
+    });
+
+    const res = await request(app).get('/api/history/summary');
+    expect(res.status).toBe(200);
+    expect(res.body.totalVisits).toBe(2);
+    expect(res.body.served).toBe(1);
+    expect(res.body.left).toBe(1);
+    expect(res.body.avgWaitMinutes).toBeGreaterThan(0);
+  });
+
+  it('filters by serviceId', async () => {
+    await recordHistory({
+      studentName: 'Alice',
+      serviceId: services[0].id,
+      serviceName: services[0].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 10 * 60_000,
+      status: 'served',
+    });
+    await recordHistory({
+      studentName: 'Bob',
+      serviceId: services[1].id,
+      serviceName: services[1].name,
+      priority: 'medium',
+      joinedAt: Date.now() - 10 * 60_000,
+      status: 'served',
+    });
+
+    const res = await request(app).get('/api/history/summary').query({ serviceId: services[0].id });
+    expect(res.status).toBe(200);
+    expect(res.body.totalVisits).toBe(1);
+  });
+});
+
 describe('GET /api/history/:id', () => {
   it('returns a single history entry', async () => {
-    const entry = recordHistory({
+    const entry = await recordHistory({
       studentName: 'Solo',
       serviceId: services[0].id,
       serviceName: services[0].name,

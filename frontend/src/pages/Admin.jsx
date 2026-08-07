@@ -640,9 +640,22 @@ function AdminHistory({ log }) {
   }, [log, serviceFilter, outcomeFilter, dateFrom, dateTo])
 
   const served = filtered.filter((e) => e.outcome === "served")
-  const avgWait = served.length
-    ? Math.round(served.reduce((sum, e) => sum + e.waitMinutes, 0) / served.length)
-    : 0
+  const [backendAvgWait, setBackendAvgWait] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams({ status: "served" })
+    if (serviceFilter !== "all") params.set("serviceId", serviceFilter)
+    fetch(`/api/history/summary?${params}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setBackendAvgWait(data.avgWaitMinutes))
+      .catch((err) => console.error("Failed to load history summary from backend:", err))
+  }, [serviceFilter])
+
+  const avgWait = backendAvgWait !== null
+    ? backendAvgWait
+    : served.length
+      ? Math.round(served.reduce((sum, e) => sum + e.waitMinutes, 0) / served.length)
+      : 0
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -881,75 +894,12 @@ function UserManagement() {
   )
 }
 
-function buildSeedLog() {
-  const now = Date.now()
-  const raw = [
-    { studentName: "Priya Nair", serviceId: "svc-registration", priority: "medium", outcome: "served", daysAgo: 0, hoursAgo: 3, waitMinutes: 9 },
-    { studentName: "Jordan Blake", serviceId: "svc-general", priority: "low", outcome: "left", daysAgo: 0, hoursAgo: 5, waitMinutes: 14 },
-    { studentName: "Emma Torres", serviceId: "svc-career", priority: "medium", outcome: "served", daysAgo: 1, hoursAgo: 2, waitMinutes: 22 },
-    { studentName: "Noah Kim", serviceId: "svc-registration", priority: "high", outcome: "served", daysAgo: 1, hoursAgo: 6, waitMinutes: 6 },
-    { studentName: "Ava Nguyen", serviceId: "svc-financial", priority: "high", outcome: "removed", daysAgo: 2, hoursAgo: 1, waitMinutes: 31 },
-    { studentName: "Ethan Brooks", serviceId: "svc-career", priority: "low", outcome: "served", daysAgo: 3, hoursAgo: 4, waitMinutes: 18 },
-    { studentName: "Sofia Rossi", serviceId: "svc-general", priority: "medium", outcome: "served", daysAgo: 4, hoursAgo: 2, waitMinutes: 12 },
-    { studentName: "Marcus Lee", serviceId: "svc-registration", priority: "low", outcome: "left", daysAgo: 6, hoursAgo: 3, waitMinutes: 20 },
-    { studentName: "Grace Park", serviceId: "svc-general", priority: "high", outcome: "served", daysAgo: 9, hoursAgo: 1, waitMinutes: 8 },
-  ]
-  return raw.map((r, i) => {
-    const resolvedAt = now - r.daysAgo * DAY_MS - r.hoursAgo * 3600_000
-    return {
-      id: `seed-${i}`,
-      studentName: r.studentName,
-      serviceId: r.serviceId,
-      serviceName: undefined, 
-      priority: r.priority,
-      outcome: r.outcome,
-      joinedAt: resolvedAt - r.waitMinutes * 60_000,
-      resolvedAt,
-      waitMinutes: r.waitMinutes,
-    }
-  })
-}
-
 function Admin() {
   const navigate = useNavigate()
-  const { user, services, queues, serveNext, removeEntry } = useApp()
+  const { user, services, queues, history, serveNext, removeEntry } = useApp()
   const [view, setView] = useState("dashboard")
   const [editingId, setEditingId] = useState(null)
   const [selectedQueueId, setSelectedQueueId] = useState(null)
-  const [log, setLog] = useState(() => buildSeedLog())
-
-  const justResolvedRef = useRef(new Set())
-  const prevQueuesRef = useRef(queues)
-
-  useEffect(() => {
-    const currentIds = new Set(queues.map((q) => q.id))
-    const vanished = prevQueuesRef.current.filter((q) => !currentIds.has(q.id))
-    if (vanished.length > 0) {
-      setLog((prev) => {
-        const additions = []
-        vanished.forEach((entry) => {
-          if (justResolvedRef.current.has(entry.id)) {
-            justResolvedRef.current.delete(entry.id)
-            return
-          }
-          const svc = services.find((s) => s.id === entry.serviceId)
-          additions.push({
-            id: `log-${entry.id}`,
-            studentName: entry.studentName,
-            serviceId: entry.serviceId,
-            serviceName: svc?.name || "Unknown service",
-            priority: entry.priority,
-            outcome: "left",
-            joinedAt: entry.joinedAt,
-            resolvedAt: Date.now(),
-            waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),
-          })
-        })
-        return additions.length ? [...additions, ...prev] : prev
-      })
-    }
-    prevQueuesRef.current = queues
-  }, [queues, services])
 
   useEffect(() => {
     if (!user) {
@@ -960,20 +910,25 @@ function Admin() {
   }, [user, navigate])
 
   const resolvedLog = useMemo(
-    () => log.map((e) => ({ ...e, serviceName: e.serviceName || services.find((s) => s.id === e.serviceId)?.name || "Unknown service" })),
-    [log, services],
+    () => history.map((e) => ({
+      id: e.id,
+      studentName: e.studentName,
+      serviceId: e.serviceId,
+      serviceName: e.serviceName,
+      priority: e.priority,
+      outcome: e.outcomeRaw,
+      resolvedAt: e.resolvedAt,
+      waitMinutes: e.waitMinutes,
+    })),
+    [history],
   )
 
   if (!user || user.role !== "admin") return null
 
   function recordResolution(service, entry, outcome) {
     if (!entry) return
-    justResolvedRef.current.add(entry.id)
-    setLog((prev) => [
-      {id: `log-${entry.id}-${Date.now()}`, studentName: entry.studentName, serviceId: service.id, serviceName: service.name, priority: entry.priority, outcome, joinedAt: entry.joinedAt, resolvedAt: Date.now(), waitMinutes: Math.max(0, Math.round((Date.now() - entry.joinedAt) / 60000)),},
-      ...prev,
-    ])
   }
+
 
   function handleServe(service, entry) {
     recordResolution(service, entry, "served")

@@ -1,4 +1,4 @@
-const TYPES = ['joined', 'near_turn', 'served', 'custom'];
+const TYPES = ['joined', 'near_turn', 'served', 'left', 'custom'];
 const NAME_MAX_LENGTH = 100;
 const MESSAGE_MAX_LENGTH = 300;
 
@@ -29,4 +29,29 @@ function validateNotificationInput(body) {
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
-module.exports = { validateNotificationInput, TYPES, NAME_MAX_LENGTH, MESSAGE_MAX_LENGTH };
+function validateNotificationQuery(query) {
+  const errors = {};
+  const input = query && typeof query === 'object' ? query : {};
+
+  if (input.studentName !== undefined && (typeof input.studentName !== 'string' || !input.studentName.trim())) {
+    errors.studentName = 'studentName filter cannot be blank.';
+  }
+
+  if (input.search !== undefined && (typeof input.search !== 'string' || !input.search.trim())) {
+    errors.search = 'search filter cannot be blank.';
+  }
+
+  if (input.type !== undefined && !TYPES.includes(input.type)) {
+    errors.type = `Type must be one of: ${TYPES.join(', ')}.`;
+  }
+
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
+module.exports = {
+  validateNotificationInput,
+  validateNotificationQuery,
+  TYPES,
+  NAME_MAX_LENGTH,
+  MESSAGE_MAX_LENGTH,
+};

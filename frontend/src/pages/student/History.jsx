@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, Clock, LogOut, Search, XCircle } from "lucide-react"
 import { useApp } from "../../components/AppContext"
 import { Badge } from "../../components/ui/badge"
@@ -25,16 +25,31 @@ const sortOptions = [
 ]
 
 export function History() {
-  const { history } = useApp()
+  const { history, user } = useApp()
   const [filter, setFilter] = useState("all")
   const [query, setQuery] = useState("")
   const [sortBy, setSortBy] = useState("date-desc")
 
-  const served = history.filter((h) => h.outcome === "Served").length
-  const avgWait = Math.round(
-    history.filter((h) => h.waitMinutes > 0).reduce((s, h) => s + h.waitMinutes, 0) /
-      Math.max(1, history.filter((h) => h.waitMinutes > 0).length),
-  )
+  const [summary, setSummary] = useState(null)
+
+  useEffect(() => {
+    const studentFilter = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
+    fetch(`/api/history/summary${studentFilter}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then(setSummary)
+      .catch((err) => console.error("Failed to load history summary from backend:", err))
+  }, [user?.name])
+
+  const totalVisits = summary ? summary.totalVisits : history.length
+  const served = summary
+    ? summary.served
+    : history.filter((h) => h.outcome === "Served").length
+  const avgWait = summary
+    ? summary.avgWaitMinutes
+    : Math.round(
+        history.filter((h) => h.waitMinutes > 0).reduce((s, h) => s + h.waitMinutes, 0) /
+          Math.max(1, history.filter((h) => h.waitMinutes > 0).length),
+      )
 
   const filtered = useMemo(() => {
     const matches = history.filter((h) => {
@@ -53,7 +68,7 @@ export function History() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total visits", value: String(history.length) },
+          { label: "Total visits", value: String(totalVisits) },
           { label: "Completed", value: String(served) },
           { label: "Avg. wait", value: `${avgWait} min` },
         ].map((s) => (

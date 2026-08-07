@@ -1,28 +1,34 @@
-const { randomUUID } = require('crypto');
+const notificationQueries = require('../data/notificationQueries');
 
-const { notifications } = require('../data/store');
-
-// A student counts as "near being served" once their queue position is at
-// or below this number.
 const NEAR_TURN_THRESHOLD = 2;
 
-function addNotification({ studentName, serviceId, serviceName, type, message }) {
-  const notification = {
-    id: randomUUID(),
+function mapNotification(row) {
+  return {
+    id: row.id,
+    studentName: row.student_name,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    type: row.type,
+    message: row.message,
+    read: row.status === 'viewed',
+    createdAt: row.created_at,
+  };
+}
+
+async function addNotification({ studentName, serviceId, serviceName, type, message }) {
+  const row = await notificationQueries.insertNotification({
     studentName,
     serviceId,
     serviceName,
     type,
     message,
-    read: false,
-    createdAt: new Date().toISOString(),
-  };
-
-  notifications.push(notification);
-  return notification;
+  });
+  // null means insertNotification hit the near-turn uniqueness guard —
+  // the student already has one pending, so there's nothing new to return.
+  return row ? mapNotification(row) : null;
 }
 
-function notifyJoin({ studentName, serviceId, serviceName, position }) {
+async function notifyJoin({ studentName, serviceId, serviceName, position }) {
   return addNotification({
     studentName,
     serviceId,
@@ -32,7 +38,7 @@ function notifyJoin({ studentName, serviceId, serviceName, position }) {
   });
 }
 
-function notifyIfNearTurn({ studentName, serviceId, serviceName, position }) {
+async function notifyIfNearTurn({ studentName, serviceId, serviceName, position }) {
   if (position <= NEAR_TURN_THRESHOLD) {
     return addNotification({
       studentName,
@@ -45,7 +51,7 @@ function notifyIfNearTurn({ studentName, serviceId, serviceName, position }) {
   return null;
 }
 
-function notifyServed({ studentName, serviceId, serviceName }) {
+async function notifyServed({ studentName, serviceId, serviceName }) {
   return addNotification({
     studentName,
     serviceId,
@@ -55,11 +61,27 @@ function notifyServed({ studentName, serviceId, serviceName }) {
   });
 }
 
+async function notifyLeft({ studentName, serviceId, serviceName }) {
+  return addNotification({
+    studentName,
+    serviceId,
+    serviceName,
+    type: 'left',
+    message: `You left the queue for ${serviceName}.`,
+  });
+}
+
+async function markNotificationRead(id) {
+  const row = await notificationQueries.markNotificationRead(id);
+  return row ? mapNotification(row) : null;
+}
+
 module.exports = {
   addNotification,
   notifyJoin,
   notifyIfNearTurn,
   notifyServed,
+  notifyLeft,
+  markNotificationRead,
   NEAR_TURN_THRESHOLD,
 };
-// Notification/History modules maintained by Jesiah Aqudelo
