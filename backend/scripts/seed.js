@@ -5,7 +5,7 @@ const { pool } = require('../src/data/db');
 async function run() {
   await insertNotification({
     studentName: 'Jesiah Agudelo',
-    serviceId: 'svc-advising',
+    serviceId: '96b1e753-a606-477d-8f5c-05d28c6e169f',
     serviceName: 'Academic Advising',
     type: 'joined',
     message: 'You joined the Academic Advising queue.',
@@ -13,7 +13,7 @@ async function run() {
 
   await insertNotification({
     studentName: 'Jesiah Agudelo',
-    serviceId: 'svc-advising',
+    serviceId: '96b1e753-a606-477d-8f5c-05d28c6e169f',
     serviceName: 'Academic Advising',
     type: 'near_turn',
     message: 'You are next in line for Academic Advising.',
@@ -21,7 +21,7 @@ async function run() {
 
   await insertHistoryEntry({
     studentName: 'Jesiah Agudelo',
-    serviceId: 'svc-advising',
+    serviceId: '96b1e753-a606-477d-8f5c-05d28c6e169f',
     serviceName: 'Academic Advising',
     priority: 'medium',
     status: 'served',
@@ -32,7 +32,7 @@ async function run() {
 
   await insertHistoryEntry({
     studentName: 'Sam Rivera',
-    serviceId: 'svc-financial-aid',
+    serviceId: '96b1e753-a606-477d-8f5c-05d28c6e169f',
     serviceName: 'Financial Aid',
     priority: 'high',
     status: 'left',

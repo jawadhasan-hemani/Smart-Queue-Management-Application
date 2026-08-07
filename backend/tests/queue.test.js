@@ -205,4 +205,4 @@ describe('seed data sanity check', () => {
     const ids = services.map((s) => s.id).sort();
     expect(ids).toEqual(['svc-career', 'svc-financial', 'svc-general', 'svc-registration']);
   });
-});
+});e
