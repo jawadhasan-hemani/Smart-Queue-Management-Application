@@ -2,9 +2,17 @@ function createFakeDb() {
   let notifications = [];
   let history = [];
   let services = [];
+  let queues = [];
+  let queueEntries = [];
   let notifSeq = 0;
   let histSeq = 0;
   let svcSeq = 0;
+  let queueSeq = 0;
+  let entrySeq = 0;
+
+  function priorityRank(p) {
+    return { high: 0, medium: 1, low: 2 }[p] ?? 3;
+  }
 
   async function query(sql, values = []) {
     const text = sql.replace(/\s+/g, ' ').trim();
@@ -37,8 +45,8 @@ function createFakeDb() {
     }
 
     if (text.startsWith('UPDATE services SET')) {
-      const id = values[values.length - 1]; // last param is always the WHERE id
-      const setValues = values.slice(0, -1); // remaining params, in SET clause order
+      const id = values[values.length - 1];
+      const setValues = values.slice(0, -1);
       const service = services.find((s) => s.id === id);
       if (!service) return { rows: [] };
 
@@ -56,6 +64,88 @@ function createFakeDb() {
       });
 
       return { rows: [{ ...service }] };
+    }
+
+    if (text.startsWith('SELECT * FROM queues WHERE service_id')) {
+      const row = queues.find((q) => q.service_id === values[0] && q.status === 'open');
+      return { rows: row ? [row] : [] };
+    }
+
+    if (text.startsWith('INSERT INTO queues')) {
+      const row = { id: `q${++queueSeq}`, service_id: values[0], status: 'open' };
+      queues.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.startsWith('SELECT *, ROW_NUMBER()')) {
+      const rows = queueEntries
+        .filter((e) => e.queue_id === values[0] && e.status === 'waiting')
+        .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at)
+        .map((e, idx) => ({ ...e, position: idx + 1 }));
+      return { rows };
+    }
+
+    if (text.startsWith('INSERT INTO queue_entries')) {
+      const row = {
+        id: `e${++entrySeq}`,
+        queue_id: values[0],
+        user_id: values[1],
+        student_name: values[2],
+        priority: values[3],
+        position: 0,
+        status: 'waiting',
+        joined_at: ++entrySeq, // simple sequence for sorting arrival
+        served_at: null,
+      };
+      queueEntries.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.startsWith('SELECT * FROM queue_entries WHERE id')) {
+      const row = queueEntries.find((e) => e.id === values[0]);
+      return { rows: row ? [row] : [] };
+    }
+
+    if (text.startsWith('DELETE FROM queue_entries WHERE id')) {
+      const idx = queueEntries.findIndex((e) => e.id === values[0]);
+      if (idx === -1) return { rows: [] };
+      const [removed] = queueEntries.splice(idx, 1);
+      return { rows: [removed] };
+    }
+
+    if (text.startsWith('SELECT * FROM queue_entries') && text.includes('LIMIT 1')) {
+      const rows = queueEntries
+        .filter((e) => e.queue_id === values[0] && e.status === 'waiting')
+        .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at);
+      return { rows: rows.length ? [rows[0]] : [] };
+    }
+
+    if (text.startsWith('UPDATE queue_entries') && text.includes("SET status = 'served'")) {
+      const entry = queueEntries.find((e) => e.id === values[0]);
+      if (entry) {
+        entry.status = 'served';
+        entry.served_at = new Date().toISOString();
+      }
+      return { rows: entry ? [entry] : [] };
+    }
+
+    if (text.startsWith('UPDATE queue_entries e')) {
+      const waiting = queueEntries
+        .filter((e) => e.queue_id === values[0] && e.status === 'waiting')
+        .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at);
+      waiting.forEach((e, idx) => {
+        e.position = idx + 1;
+      });
+      return { rows: [] };
+    }
+
+    if (text.startsWith('SELECT s.id AS service_id, s.name AS service_name, s.open')) {
+      const rows = services.map((s) => {
+        const q = queues.find((qq) => qq.service_id === s.id && qq.status === 'open');
+        const count = q ? queueEntries.filter((e) => e.queue_id === q.id && e.status === 'waiting').length : 0;
+        return { service_id: s.id, service_name: s.name, open: s.open, count };
+      });
+      return { rows };
     }
 
     if (text.startsWith('INSERT INTO notifications')) {
@@ -170,9 +260,13 @@ function createFakeDb() {
     notifications = [];
     history = [];
     services = [];
+    queues = [];
+    queueEntries = [];
     notifSeq = 0;
     histSeq = 0;
     svcSeq = 0;
+    queueSeq = 0;
+    entrySeq = 0;
   }
 
   return { query, reset };

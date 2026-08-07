@@ -1,3 +1,8 @@
+jest.mock('../middleware/authMiddleware', () => ({
+  verifyFirebaseToken: (req, res, next) => next(),
+  authorize: () => (req, res, next) => next(),
+}));
+
 jest.mock('../config/db', () => ({
   query: jest.fn(),
   pool: { query: jest.fn() },
@@ -5,136 +10,29 @@ jest.mock('../config/db', () => ({
 
 const request = require('supertest');
 
+const { createFakeDb } = require('./testUtils/fakeDb');
+const mockDb = createFakeDb();
+jest.mock('../config/db', () => ({ pool: mockDb, query: mockDb.query }));
+
 const db = require('../config/db');
 const app = require('../src/app');
-
-let services;
-let queues;
-let queueEntries;
-let idCounter;
-
-function nextId(prefix) {
-  idCounter += 1;
-  return `${prefix}-${idCounter}`;
-}
-
-function priorityRank(p) {
-  return { high: 0, medium: 1, low: 2 }[p] ?? 3;
-}
-
-function resetFakeDb() {
-  idCounter = 0;
-  services = [
-    { id: 'svc-general', name: 'General Advising', description: 'd', duration: 12, priority: 'medium', open: true },
-    { id: 'svc-financial', name: 'Financial Aid', description: 'd', duration: 15, priority: 'high', open: false },
-  ];
-  queues = [];
-  queueEntries = [];
-}
-
-function fakeQuery(text) {
-  const params = arguments[1] || [];
-  const sql = text.replace(/\s+/g, ' ').trim();
-
-  if (sql.startsWith('SELECT * FROM services WHERE id')) {
-    const [id] = params;
-    const row = services.find((s) => s.id === id);
-    return Promise.resolve({ rows: row ? [row] : [] });
-  }
-
-  if (sql.startsWith("SELECT * FROM queues WHERE service_id")) {
-    const [serviceId] = params;
-    const row = queues.find((q) => q.service_id === serviceId && q.status === 'open');
-    return Promise.resolve({ rows: row ? [row] : [] });
-  }
-
-  if (sql.startsWith('INSERT INTO queues')) {
-    const [serviceId] = params;
-    const row = { id: nextId('queue'), service_id: serviceId, status: 'open' };
-    queues.push(row);
-    return Promise.resolve({ rows: [row] });
-  }
-
-  if (sql.startsWith('SELECT *, ROW_NUMBER()')) {
-    const [queueId] = params;
-    const rows = queueEntries
-      .filter((e) => e.queue_id === queueId && e.status === 'waiting')
-      .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at)
-      .map((e, idx) => ({ ...e, position: idx + 1 }));
-    return Promise.resolve({ rows });
-  }
-
-  if (sql.startsWith('INSERT INTO queue_entries')) {
-    const [queueId, userId, studentName, priority] = params;
-    idCounter += 1;
-    const row = {
-      id: nextId('entry'),
-      queue_id: queueId,
-      user_id: userId,
-      student_name: studentName,
-      priority,
-      position: 0,
-      status: 'waiting',
-      joined_at: idCounter,
-      served_at: null,
-    };
-    queueEntries.push(row);
-    return Promise.resolve({ rows: [row] });
-  }
-
-  if (sql.startsWith('DELETE FROM queue_entries WHERE id')) {
-    const [id] = params;
-    const idx = queueEntries.findIndex((e) => e.id === id);
-    if (idx === -1) return Promise.resolve({ rows: [] });
-    const [removed] = queueEntries.splice(idx, 1);
-    return Promise.resolve({ rows: [removed] });
-  }
-
-  if (sql.startsWith('SELECT * FROM queue_entries') && sql.includes('LIMIT 1')) {
-    const [queueId] = params;
-    const rows = queueEntries
-      .filter((e) => e.queue_id === queueId && e.status === 'waiting')
-      .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at);
-    return Promise.resolve({ rows: rows.length ? [rows[0]] : [] });
-  }
-
-  if (sql.startsWith('UPDATE queue_entries') && sql.includes("SET status = 'served'")) {
-    const [id] = params;
-    const entry = queueEntries.find((e) => e.id === id);
-    if (entry) {
-      entry.status = 'served';
-      entry.served_at = Date.now();
-    }
-    return Promise.resolve({ rows: entry ? [entry] : [] });
-  }
-
-  if (sql.startsWith('UPDATE queue_entries e')) {
-    const [queueId] = params;
-    const waiting = queueEntries
-      .filter((e) => e.queue_id === queueId && e.status === 'waiting')
-      .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.joined_at - b.joined_at);
-    waiting.forEach((e, idx) => {
-      e.position = idx + 1;
-    });
-    return Promise.resolve({ rows: [] });
-  }
-
-  if (sql.startsWith('SELECT s.id AS service_id')) {
-    const rows = services.map((s) => {
-      const q = queues.find((qq) => qq.service_id === s.id && qq.status === 'open');
-      const count = q ? queueEntries.filter((e) => e.queue_id === q.id && e.status === 'waiting').length : 0;
-      return { service_id: s.id, service_name: s.name, open: s.open, count };
-    });
-    return Promise.resolve({ rows });
-  }
-
-  throw new Error(`Unhandled fake SQL in test: ${sql}`);
-}
+const { services, resetStore } = require('../src/data/store');
 
 beforeEach(() => {
-  resetFakeDb();
-  db.query.mockReset();
-  db.query.mockImplementation(fakeQuery);
+  resetStore();
+  mockDb.reset();
+  
+  mockDb.query('INSERT INTO services (name, description, duration, priority, open) VALUES ($1, $2, $3, $4, $5)', [
+    'General Advising', 'd', 12, 'medium', true,
+  ]).then(res => {
+    res.rows[0].id = 'svc-general';
+  });
+
+  mockDb.query('INSERT INTO services (name, description, duration, priority, open) VALUES ($1, $2, $3, $4, $5)', [
+    'Financial Aid', 'd', 15, 'high', false,
+  ]).then(res => {
+    res.rows[0].id = 'svc-financial';
+  });
 });
 
 describe('GET /api/queue', () => {
