@@ -4,11 +4,13 @@ function createFakeDb() {
   let services = [];
   let queues = [];
   let queueEntries = [];
+  let chatMessages = [];
   let notifSeq = 0;
   let histSeq = 0;
   let svcSeq = 0;
   let queueSeq = 0;
   let entrySeq = 0;
+  let chatSeq = 0;
 
   function priorityRank(p) {
     return { high: 0, medium: 1, low: 2 }[p] ?? 3;
@@ -253,6 +255,26 @@ function createFakeDb() {
       return { rows: list };
     }
 
+    if (text.startsWith('INSERT INTO chat_messages')) {
+      const [userId, role, content] = values;
+      const row = {
+        id: `chat${++chatSeq}`,
+        user_id: userId,
+        role,
+        content,
+        created_at: new Date(Date.now() + chatSeq).toISOString(),
+      };
+      chatMessages.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.startsWith('SELECT * FROM chat_messages WHERE user_id')) {
+      const list = chatMessages
+        .filter((c) => c.user_id === values[0])
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      return { rows: list };
+    }
+
     throw new Error(`fakeDb: unhandled query: ${text}`);
   }
 
@@ -262,11 +284,13 @@ function createFakeDb() {
     services = [];
     queues = [];
     queueEntries = [];
+    chatMessages = [];
     notifSeq = 0;
     histSeq = 0;
     svcSeq = 0;
     queueSeq = 0;
     entrySeq = 0;
+    chatSeq = 0;
   }
 
   return { query, reset };

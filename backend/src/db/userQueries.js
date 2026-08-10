@@ -14,6 +14,7 @@ async function insertUserCredentials(firebaseUid, email, rawPassword, role = 'us
     VALUES ($1, $2, $3, $4)
     ON CONFLICT (firebase_uid) DO UPDATE
       SET email      = EXCLUDED.email,
+          role       = EXCLUDED.role,
           updated_at = NOW()
     RETURNING *;
   `;

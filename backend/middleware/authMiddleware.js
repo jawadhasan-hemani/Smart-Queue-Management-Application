@@ -23,9 +23,23 @@ const verifyFirebaseToken = async (req, res, next) => {
     // Attach Firebase UID and decoded info to request
     req.user = decodedToken;
 
-    // Look up the user in the database to attach role
-    const localUser = await userQueries.findUserByFirebaseUid(decodedToken.uid);
+    // Look up the user in the database to attach role and id
+    let localUser = await userQueries.findUserByFirebaseUid(decodedToken.uid);
+    if (!localUser) {
+      // Auto-create user_credentials if they don't exist yet (first-time login)
+      try {
+        localUser = await userQueries.insertUserCredentials(
+          decodedToken.uid,
+          decodedToken.email || '',
+          decodedToken.uid,
+          'user'
+        );
+      } catch (autoErr) {
+        console.error('Auto-sync user failed:', autoErr);
+      }
+    }
     if (localUser) {
+      req.user.id = localUser.id;    // database UUID from user_credentials
       req.user.role = localUser.role;
     } else {
       req.user.role = 'user'; // default role
