@@ -76,6 +76,13 @@ router.post('/:serviceId/join', async (req, res) => {
     }
 
     const queue = await queueQueries.getOrCreateQueue(service.id);
+    
+    // Check for duplicate entry
+    const existingEntries = await queueQueries.getQueueEntries(queue.id);
+    if (existingEntries.some((e) => e.student_name.toLowerCase() === req.body.studentName.trim().toLowerCase())) {
+      return res.status(400).json({ error: 'You are already in this queue.' });
+    }
+
     const entry = await queueQueries.addQueueEntry(
       queue.id,
       req.body.userId || null,
@@ -97,6 +104,43 @@ router.post('/:serviceId/join', async (req, res) => {
     });
 
     res.status(201).json({ entry });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.patch('/:serviceId/move/:entryId', async (req, res) => {
+  try {
+    const { direction } = req.body;
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({ error: 'Invalid direction.' });
+    }
+
+    const service = await serviceQueries.getServiceById(req.params.serviceId);
+    if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+    const queue = await queueQueries.getOrCreateQueue(service.id);
+    const entries = await queueQueries.getQueueEntries(queue.id);
+    
+    const idx = entries.findIndex((e) => e.id === req.params.entryId);
+    if (idx === -1) return res.status(404).json({ error: 'Entry not found.' });
+    
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= entries.length) {
+      return res.status(400).json({ error: 'Cannot move in that direction.' });
+    }
+
+    const entryA = entries[idx];
+    const entryB = entries[swapIdx];
+
+    const success = await queueQueries.swapQueueEntries(entryA.id, entryB.id);
+    if (!success) {
+      return res.status(500).json({ error: 'Failed to move entry.' });
+    }
+
+    await renotifyNearTurn(service, queue.id);
+    res.status(200).json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });

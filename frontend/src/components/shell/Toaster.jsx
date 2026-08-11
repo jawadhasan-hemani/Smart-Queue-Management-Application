@@ -67,26 +67,33 @@ export function Toaster() {
 
     fresh.forEach((n) => seenIds.current.add(n.id))
 
+    // Deduplicate fresh notifications against currently showing toasts based on title and body
+    const uniqueFresh = fresh.filter(f => !toasts.some(t => t.title === f.title && t.body === f.body))
+    
+    if (uniqueFresh.length === 0) return
+
     // "Up next" alerts get a sound + vibration cue regardless of mute, since it's time-critical
-    const urgent = fresh.some((n) => n.tone === "warning")
-    if (urgent) {
+    const hasUrgent = uniqueFresh.some((n) => n.tone === "warning" || n.type === "near_turn")
+    if (hasUrgent || (!muteToasts && uniqueFresh.length > 0)) {
       playChime()
-      if (navigator.vibrate) navigator.vibrate([120, 60, 120])
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(hasUrgent ? [200, 100, 200] : [100])
+      }
     }
 
     if (muteToasts) return
 
-    setToasts((prev) => [...fresh.map((n) => ({ ...n, visible: false })), ...prev])
+    setToasts((prev) => [...uniqueFresh.map((n) => ({ ...n, visible: false })), ...prev])
 
     requestAnimationFrame(() => {
-      setToasts((prev) => prev.map((t) => (fresh.some((f) => f.id === t.id) ? { ...t, visible: true } : t)))
+      setToasts((prev) => prev.map((t) => (uniqueFresh.some((f) => f.id === t.id) ? { ...t, visible: true } : t)))
     })
 
-    fresh.forEach((n) => {
+    uniqueFresh.forEach((n) => {
       setTimeout(() => dismiss(n.id), TOAST_DURATION_MS)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notifications, muteToasts])
+  }, [notifications, muteToasts, toasts])
 
   function dismiss(id) {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, visible: false } : t)))

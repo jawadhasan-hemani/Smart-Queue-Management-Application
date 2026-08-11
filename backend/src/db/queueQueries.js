@@ -32,11 +32,11 @@ async function getQueueByServiceId(serviceId) {
 async function getQueueEntries(queueId) {
   const result = await query(
     `SELECT *, ROW_NUMBER() OVER (
-        ORDER BY ${PRIORITY_CASE}, joined_at ASC
+        ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC
       ) AS position
      FROM queue_entries
      WHERE queue_id = $1 AND status = 'waiting'
-     ORDER BY ${PRIORITY_CASE}, joined_at ASC`,
+     ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC`,
     [queueId],
   );
   return result.rows;
@@ -90,17 +90,36 @@ async function serveNextEntry(queueId) {
 async function updateEntryPositions(queueId) {
   await query(
     `UPDATE queue_entries e
-     SET position = sub.new_position
+     SET position = sub.pos
      FROM (
-       SELECT id, ROW_NUMBER() OVER (
-         ORDER BY ${PRIORITY_CASE}, joined_at ASC
-       ) AS new_position
+       SELECT id, ROW_NUMBER() OVER (ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC) as pos
        FROM queue_entries
        WHERE queue_id = $1 AND status = 'waiting'
      ) sub
      WHERE e.id = sub.id`,
     [queueId],
   );
+}
+
+async function swapQueueEntries(entryIdA, entryIdB) {
+  const resultA = await query('SELECT joined_at, priority, queue_id FROM queue_entries WHERE id = $1', [entryIdA]);
+  const resultB = await query('SELECT joined_at, priority FROM queue_entries WHERE id = $1', [entryIdB]);
+  
+  if (!resultA.rows[0] || !resultB.rows[0]) return false;
+  const a = resultA.rows[0];
+  const b = resultB.rows[0];
+  
+  await query(
+    'UPDATE queue_entries SET joined_at = $1, priority = $2 WHERE id = $3',
+    [b.joined_at, b.priority, entryIdA]
+  );
+  await query(
+    'UPDATE queue_entries SET joined_at = $1, priority = $2 WHERE id = $3',
+    [a.joined_at, a.priority, entryIdB]
+  );
+  
+  await updateEntryPositions(a.queue_id);
+  return true;
 }
 
 async function getQueueSummary() {
@@ -130,4 +149,5 @@ module.exports = {
   serveNextEntry,
   updateEntryPositions,
   getQueueSummary,
+  swapQueueEntries,
 };

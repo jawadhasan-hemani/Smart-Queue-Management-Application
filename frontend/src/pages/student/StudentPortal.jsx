@@ -30,6 +30,8 @@ export function StudentPortal() {
   useEffect(() => {
     if (!user) {
       navigate("/")
+    } else if (user.role === "admin") {
+      navigate("/admin")
     }
   }, [user, navigate])
 

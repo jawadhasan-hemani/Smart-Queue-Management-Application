@@ -89,11 +89,37 @@ BEGIN
   ALTER TABLE queue_history ADD CONSTRAINT uq_queue_history_visit UNIQUE (student_name, service_id, joined_at);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
 END $$;
 
 -- A student shouldn't accumulate more than one *unread* "you're almost up"
 -- ping for the same service at once. Scoped to type/status so it doesn't
 -- block legitimate near-turn notifications on a later, separate visit.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_near_turn_pending
-  ON notifications (student_name, service_id)
+    ON notifications (student_name, service_id)
   WHERE type = 'near_turn' AND status = 'sent';
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  title VARCHAR(100) DEFAULT 'New Chat',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  FOREIGN KEY (user_id) REFERENCES user_credentials(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  session_id UUID NOT NULL,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'model')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  FOREIGN KEY (user_id) REFERENCES user_credentials(id) ON DELETE CASCADE,
+  FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at ASC);

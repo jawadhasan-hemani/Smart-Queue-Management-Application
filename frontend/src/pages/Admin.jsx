@@ -150,8 +150,47 @@ function DatePicker({ id, value, onChange, placeholder = "mm/dd/yyyy" }) {
   )
 }
 
+const PRIORITY_RANK = { high: 1, medium: 2, low: 3 }
+
+function useServiceFilterSort(services, orderedQueue) {
+  const [sortBy, setSortBy] = useState("default")
+
+  const processedServices = useMemo(() => {
+    let result = [...services]
+    
+    if (sortBy === "students-high") {
+      result.sort((a, b) => orderedQueue(b.id).length - orderedQueue(a.id).length)
+    } else if (sortBy === "students-low") {
+      result.sort((a, b) => orderedQueue(a.id).length - orderedQueue(b.id).length)
+    } else if (sortBy === "priority-high") {
+      result.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])
+    } else if (sortBy === "priority-low") {
+      result.sort((a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority])
+    }
+    
+    return result
+  }, [services, orderedQueue, sortBy])
+
+  const controls = (
+    <div className="flex items-center gap-2">
+      <div className="w-48">
+        <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <option value="default">Default Sort</option>
+          <option value="students-high">Most Students</option>
+          <option value="students-low">Fewest Students</option>
+          <option value="priority-high">Priority (High - Low)</option>
+          <option value="priority-low">Priority (Low - High)</option>
+        </Select>
+      </div>
+    </div>
+  )
+
+  return { processedServices, controls }
+}
+
 function AdminDashboard({ onEditService, onManageQueue }) {
   const { services, orderedQueue, estimatedWait, toggleServiceOpen } = useApp()
+  const { processedServices, controls } = useServiceFilterSort(services, orderedQueue)
 
   const totalWaiting = services.reduce((sum, s) => sum + orderedQueue(s.id).length, 0)
   const openServices = services.filter((s) => s.open)
@@ -165,8 +204,8 @@ function AdminDashboard({ onEditService, onManageQueue }) {
           { icon: CheckCircle2, label: "Open services", value: String(openServices.length) },
           { icon: Clock, label: "Total services", value: String(services.length) },
           { icon: TriangleAlert, label: "High priority open", value: String(highPriorityOpen) },
-        ].map(({ icon: Icon, label, value }) => (
-          <Card key={label}>
+        ].map(({ icon: Icon, label, value }, i) => (
+          <Card key={label} className={`animate-card delay-${i + 1}`}>
             <CardContent className="space-y-2 p-5">
               <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Icon className="size-[18px]" />
@@ -179,23 +218,31 @@ function AdminDashboard({ onEditService, onManageQueue }) {
       </div>
 
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Services</h2>
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="font-semibold">Services</h2>
+            {controls}
+          </div>
           <button
             type="button"
             onClick={() => onEditService(null)}
-            className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
             <Plus className="size-4" /> New service
           </button>
         </div>
 
         <div className="space-y-3">
-          {services.map((s) => {
+          {processedServices.map((s, i) => {
             const count = orderedQueue(s.id).length
             const wait = estimatedWait(s.id, count + 1)
             return (
-              <Card key={s.id}>
+              <Card 
+                key={s.id} 
+                className="animate-fade-in-up cursor-pointer hover:shadow-md transition-shadow" 
+                style={{ animationDelay: `${i * 60}ms` }}
+                onClick={() => onManageQueue(s.id)}
+              >
                 <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -205,21 +252,40 @@ function AdminDashboard({ onEditService, onManageQueue }) {
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">{s.description}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {s.open ? `${count} waiting · ~${formatWait(wait)} for a new arrival` : "Not accepting new students"}
+                      {s.open ? `${count} waiting · ${formatWait(wait)} for a new arrival` : "Not accepting new students"}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={() => onManageQueue(s.id)}>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-9 rounded-md" 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onManageQueue(s.id)
+                      }}
+                    >
                       Manage queue
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={() => onEditService(s.id)}>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-9 rounded-md" 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEditService(s.id)
+                      }}
+                    >
                       <Pencil className="size-3.5" /> Edit
                     </Button>
                     <Button
                       variant={s.open ? "destructive" : "default"}
                       size="sm"
                       className="h-9 rounded-md"
-                      onClick={() => toggleServiceOpen(s.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleServiceOpen(s.id)
+                      }}
                     >
                       {s.open ? "Close" : "Open"}
                     </Button>
@@ -437,9 +503,12 @@ function QueueOverviewCard({ service, line, onOpen }) {
               <span className="text-muted-foreground"> · {line.length} student{line.length === 1 ? "" : "s"} in line</span>
             </p>
           </div>
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-            {line.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <PriorityBadge priority={service.priority} />
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+              {line.length}
+            </span>
+          </div>
         </div>
 
         {line.length > 0 && (
@@ -450,9 +519,8 @@ function QueueOverviewCard({ service, line, onOpen }) {
                   {idx + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm">
-                    <span className="font-medium">{entry.studentName}</span>{" "}
-                    <PriorityBadge priority={entry.priority} />
+                  <p className="truncate text-sm font-medium">
+                    {entry.studentName}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Joined {relativeTime(entry.joinedAt)} ·{" "}
@@ -477,6 +545,7 @@ function QueueOverviewCard({ service, line, onOpen }) {
 
 function QueueManagement({ selectedId, onSelect, onServe, onRemove }) {
   const { services, orderedQueue, estimatedWait, moveEntry } = useApp()
+  const { processedServices, controls } = useServiceFilterSort(services, orderedQueue)
   const service = services.find((s) => s.id === selectedId) || null
   const line = useMemo(() => (service ? orderedQueue(service.id) : []), [service, orderedQueue])
 
@@ -485,11 +554,17 @@ function QueueManagement({ selectedId, onSelect, onServe, onRemove }) {
       return <p className="mx-auto max-w-5xl text-sm text-muted-foreground">Create a service to start managing its queue.</p>
     }
     return (
-      <div className="mx-auto grid max-w-5xl gap-5 sm:grid-cols-2">
-        {services.map((s) => {
-          const l = orderedQueue(s.id).map((entry, idx) => ({ ...entry, __wait: estimatedWait(s.id, idx + 1) }))
-          return <QueueOverviewCard key={s.id} service={s} line={l} onOpen={() => onSelect(s.id)} />
-        })}
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex items-center gap-4 mb-4">
+          <h2 className="font-semibold">Queues</h2>
+          {controls}
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          {processedServices.map((s) => {
+            const l = orderedQueue(s.id).map((entry, idx) => ({ ...entry, __wait: estimatedWait(s.id, idx + 1) }))
+            return <QueueOverviewCard key={s.id} service={s} line={l} onOpen={() => onSelect(s.id)} />
+          })}
+        </div>
       </div>
     )
   }
@@ -512,9 +587,12 @@ function QueueManagement({ selectedId, onSelect, onServe, onRemove }) {
                 <h2 className="font-semibold">{service.name}</h2>
                 <ServiceStateBadge open={service.open} />
               </div>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {line.length} student{line.length === 1 ? "" : "s"} in line
-              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <PriorityBadge priority={service.priority} />
+                <span className="text-sm text-muted-foreground">
+                  {line.length} student{line.length === 1 ? "" : "s"} in line
+                </span>
+              </div>
             </div>
             <Button
               className="h-9 shrink-0"
@@ -545,10 +623,9 @@ function QueueManagement({ selectedId, onSelect, onServe, onRemove }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium">{entry.studentName}</p>
-                      <PriorityBadge priority={entry.priority} />
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Joined {relativeTime(entry.joinedAt)} · ~{formatWait(estimatedWait(service.id, idx + 1))}
+                      Joined {relativeTime(entry.joinedAt)} · {formatWait(estimatedWait(service.id, idx + 1))}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">

@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ComingSoon from './pages/ComingSoon';
 import { StudentPortal } from './pages/student/StudentPortal';
 import Admin from './pages/Admin';
+import AIChatbot from './components/AIChatbot';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
           {/* Student Portal Route */}
           <Route path="/dashboard/*" element={<StudentPortal />} />
         </Routes>
+        <AIChatbot />
       </Router>
     </AppProvider>
   );
