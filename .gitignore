@@ -15,8 +15,8 @@ notifications-history-module.zip
 .env
 schema.txt
 a4.txt
-t e s t _ o u t p u t . l o g  
- p a t c h . j s  
+test_output.log
+patch.js
  
 coverage/
 backend/scripts/
