@@ -26,7 +26,7 @@ export function StudentDashboard({ onNavigate }) {
 
       {/* Live status hero */}
       {active ? (
-        <Card className="overflow-hidden border-primary/30 bg-primary text-primary-foreground">
+        <Card className="overflow-hidden border-primary/30 bg-primary text-primary-foreground animate-fade-in-up">
           <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export function StudentDashboard({ onNavigate }) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-dashed">
+        <Card className="border-dashed animate-fade-in-up">
           <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -79,8 +79,8 @@ export function StudentDashboard({ onNavigate }) {
           { icon: Clock, label: "Estimated wait", value: active ? formatWait(active.wait) : "—" },
           { icon: Users, label: "Students waiting", value: String(totalWaiting) },
           { icon: CheckCircle2, label: "Open services", value: String(openServices.length) },
-        ].map(({ icon: Icon, label, value }) => (
-          <Card key={label}>
+        ].map(({ icon: Icon, label, value }, i) => (
+          <Card key={label} className={`animate-card delay-${i + 1}`}>
             <CardContent className="space-y-2 p-5">
               <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Icon className="size-[18px]" />
@@ -106,10 +106,10 @@ export function StudentDashboard({ onNavigate }) {
             </button>
           </div>
           <div className="space-y-3">
-            {openServices.map((s) => {
+            {openServices.map((s, i) => {
               const count = orderedQueue(s.id).length
               return (
-                <Card key={s.id}>
+                <Card key={s.id} className="animate-fade-in-up" style={{ animationDelay: `${i * 60}ms` }}>
                   <CardContent className="flex items-center justify-between gap-4 p-4">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{s.name}</p>

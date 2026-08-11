@@ -22,8 +22,21 @@ export function NotificationsMenu() {
     requestPushPermission,
   } = useApp()
   const [open, setOpen] = useState(false)
+  const [visible, setVisible] = useState(false) // drives the CSS transition
   const ref = useRef(null)
   const unread = notifications.filter((n) => !n.read).length
+
+  // Two-phase open: mount the DOM (`open`) then trigger the CSS transition (`visible`)
+  useEffect(() => {
+    if (open) {
+      // Let the browser paint the element at scale-95/opacity-0 first, then flip to visible
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true))
+      })
+    } else {
+      setVisible(false)
+    }
+  }, [open])
 
   useEffect(() => {
     function onClick(e) {
@@ -58,7 +71,16 @@ export function NotificationsMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-border bg-popover shadow-lg">
+        <div
+          className={`absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-border bg-popover shadow-lg
+            transition-all duration-200 ease-out origin-top-right
+            ${visible ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 -translate-y-1'}
+          `}
+          onTransitionEnd={() => {
+            // After the close animation finishes, unmount
+            if (!visible) setOpen(false)
+          }}
+        >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>
             <div className="flex items-center gap-2.5">
@@ -101,10 +123,16 @@ export function NotificationsMenu() {
             {notifications.length === 0 && (
               <li className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet.</li>
             )}
-            {notifications.map((n) => {
+            {notifications.map((n, i) => {
               const { Icon, cls } = toneIcon[n.tone]
               return (
-                <li key={n.id} className="flex gap-3 px-4 py-3">
+                <li
+                  key={n.id}
+                  className={`flex gap-3 px-4 py-3 transition-all duration-200 ease-out
+                    ${visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'}
+                  `}
+                  style={{ transitionDelay: visible ? `${Math.min(i * 30, 150)}ms` : '0ms' }}
+                >
                   <Icon className={`mt-0.5 size-4 shrink-0 ${cls}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium leading-tight">{n.title}</p>

@@ -398,16 +398,17 @@ export default function AIChatbot() {
       <div className="relative flex flex-col items-end">
         {/* Tooltip badge */}
         {!isOpen && messages.length === 0 && !unreadResponse && (
-          <div className="mb-2 bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full shadow-lg animate-bounce">
+          <div className="mb-2 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg animate-bounce" style={{ background: '#1a3c4d' }}>
             Need help?
           </div>
         )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`relative p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center
-            ${isOpen ? 'bg-secondary text-secondary-foreground rotate-90 scale-90' : 'bg-primary text-primary-foreground hover:scale-105'}
+          className={`relative p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center text-white
+            ${isOpen ? 'rotate-90 scale-90' : 'hover:scale-105'}
           `}
+          style={{ background: '#1a3c4d' }}
         >
           {isOpen ? <X size={28} className="-rotate-90" /> : <MessageCircle size={28} />}
 
@@ -415,7 +416,7 @@ export default function AIChatbot() {
           {!isOpen && unreadResponse && (
             <span className="absolute top-0 right-0 flex h-4 w-4">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-destructive border-2 border-primary border-solid"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-destructive border-2 border-solid" style={{ borderColor: '#1a3c4d' }}></span>
             </span>
           )}
         </button>

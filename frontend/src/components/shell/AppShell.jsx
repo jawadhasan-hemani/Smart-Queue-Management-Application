@@ -69,7 +69,7 @@ export function AppShell({ nav, active, onNavigate, title, subtitle, children })
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-5 py-4 backdrop-blur-sm sm:px-8">
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-background px-5 py-4 sm:px-8">
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
             {subtitle && <p className="truncate text-sm text-muted-foreground">{subtitle}</p>}

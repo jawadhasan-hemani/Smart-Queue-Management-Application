@@ -133,61 +133,7 @@ export function AppProvider({ children }) {
     return res.json()
   }, [])
 
-  // --- Load services from backend on mount ---
-  useEffect(() => {
-    apiFetch("/services")
-      .then((data) => {
-        if (data.services && data.services.length > 0) {
-          setServices(data.services.map((s) => ({
-            id: s.id,
-            name: s.name,
-            description: s.description,
-            duration: s.duration,
-            priority: s.priority,
-            open: s.open,
-          })))
-        }
-      })
-      .catch((err) => console.error("Failed to load services from backend:", err))
-  }, [apiFetch])
-
-  // --- Load queue entries from backend on mount ---
-  useEffect(() => {
-    apiFetch("/queue")
-      .then((data) => {
-        if (data.summary) {
-          // For each service with entries, load the full queue
-          const promises = data.summary
-            .filter((s) => s.count > 0)
-            .map((s) =>
-              apiFetch(`/queue/${s.serviceId}`)
-                .then((qData) =>
-                  (qData.queue || []).map((entry) => ({
-                    id: entry.id,
-                    serviceId: s.serviceId,
-                    studentName: entry.studentName,
-                    joinedAt: new Date(entry.joinedAt).getTime(),
-                    priority: entry.priority || "medium",
-                  }))
-                )
-                .catch(() => [])
-            )
-          return Promise.all(promises).then((results) => {
-            const allEntries = results.flat()
-            if (allEntries.length > 0) {
-              setQueues(allEntries)
-            }
-          })
-        }
-      })
-      .catch((err) => console.error("Failed to load queues from backend:", err))
-  }, [apiFetch])
-
   // --- Backend integration: History & Notification modules ---
-  // Pulls real data from the backend (falls back to whatever is already in
-  // shared/local state — the mock seed — if the request fails, so the UI
-  // never breaks if the backend isn't running).
-
   const mapHistoryEntry = useCallback((entry) => ({
     id: entry.id,
     studentName: entry.studentName,
@@ -221,17 +167,77 @@ export function AppProvider({ children }) {
     tone: notificationCopy[n.type]?.tone ?? "info",
   }), [])
 
+  // --- Periodic polling for live updates ---
   useEffect(() => {
-    const query = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
+    let mounted = true
 
-    apiFetch(`/history${query}`)
-      .then((data) => setHistory(data.history.map(mapHistoryEntry)))
-      .catch((err) => console.error("Failed to load history from backend:", err))
+    const syncData = async () => {
+      try {
+        // Sync Services
+        const srvData = await apiFetch("/services")
+        if (srvData.services && mounted) {
+          setServices(srvData.services.map((s) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            duration: s.duration,
+            priority: s.priority,
+            open: s.open,
+          })))
+        }
 
-    apiFetch(`/notifications${query}`)
-      .then((data) => setNotifications(data.notifications.map(mapNotification)))
-      .catch((err) => console.error("Failed to load notifications from backend:", err))
-  }, [user?.name, mapHistoryEntry, mapNotification, apiFetch])
+        // Sync Queues
+        const qData = await apiFetch("/queue")
+        if (qData.summary && mounted) {
+          const promises = qData.summary
+            .filter((s) => s.count > 0)
+            .map((s) =>
+              apiFetch(`/queue/${s.serviceId}`)
+                .then((res) =>
+                  (res.queue || []).map((entry) => ({
+                    id: entry.id,
+                    serviceId: s.serviceId,
+                    studentName: entry.studentName || entry.student_name,
+                    joinedAt: new Date(entry.joinedAt || entry.joined_at).getTime(),
+                    priority: entry.priority || "medium",
+                  }))
+                )
+                .catch(() => [])
+            )
+          const results = await Promise.all(promises)
+          if (mounted) {
+            setQueues(results.flat())
+          }
+        }
+
+        // Sync History and Notifications
+        const query = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
+        
+        const [histData, notifData] = await Promise.all([
+          apiFetch(`/history${query}`).catch(() => null),
+          apiFetch(`/notifications${query}`).catch(() => null)
+        ])
+        
+        if (histData && histData.history && mounted) {
+          setHistory(histData.history.map(mapHistoryEntry))
+        }
+        if (notifData && notifData.notifications && mounted) {
+          setNotifications(notifData.notifications.map(mapNotification))
+        }
+
+      } catch (err) {
+        console.error("Polling sync failed:", err)
+      }
+    }
+
+    syncData()
+    const interval = setInterval(syncData, 5000)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [apiFetch, setServices, setQueues, setHistory, setNotifications, user?.name, mapHistoryEntry, mapNotification])
 
   // Per-device notification preferences (not shared across tabs/users on purpose)
   const [muteToasts, setMuteToastsState] = useState(() => {
@@ -439,17 +445,22 @@ export function AppProvider({ children }) {
   const myCurrentEntry = myEntry()
   const currentPosition = myCurrentEntry?.position
 
-  const prevPosRef = React.useRef(currentPosition)
+  const bestPosRef = React.useRef(currentPosition)
   
   React.useEffect(() => {
-    if (currentPosition && prevPosRef.current && currentPosition < prevPosRef.current) {
-      pushNotification({
-        title: "Queue Update",
-        body: `You've moved up! You are now position #${currentPosition}.`,
-        tone: "info"
-      })
+    if (currentPosition) {
+      if (bestPosRef.current === undefined || currentPosition < bestPosRef.current) {
+        // Only notify if we improved on our best known position (prevents duplicate spam on bounces)
+        if (bestPosRef.current !== undefined) {
+          pushNotification({
+            title: "Queue Update",
+            body: `You've moved up! You are now position #${currentPosition}.`,
+            tone: "info"
+          })
+        }
+        bestPosRef.current = currentPosition
+      }
     }
-    prevPosRef.current = currentPosition
   }, [currentPosition, pushNotification])
 
   const joinQueue = useCallback(
@@ -494,8 +505,8 @@ export function AppProvider({ children }) {
                 ? {
                     id: data.entry.id,
                     serviceId,
-                    studentName: data.entry.studentName,
-                    joinedAt: data.entry.joinedAt ? new Date(data.entry.joinedAt).getTime() : Date.now(),
+                    studentName: data.entry.studentName || data.entry.student_name,
+                    joinedAt: (data.entry.joinedAt || data.entry.joined_at) ? new Date(data.entry.joinedAt || data.entry.joined_at).getTime() : Date.now(),
                     priority: data.entry.priority || "medium",
                   }
                 : q
@@ -589,32 +600,47 @@ export function AppProvider({ children }) {
   )
 
   const moveEntry = useCallback(
-    (entryId, direction) => {
+    async (entryId, direction) => {
+      const entry = queues.find((q) => q.id === entryId)
+      if (!entry) return
+
+      const serviceId = entry.serviceId
+      const group = queues
+        .filter((q) => q.serviceId === serviceId)
+        .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.joinedAt - b.joinedAt)
+      
+      const idx = group.findIndex((q) => q.id === entryId)
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= group.length) return
+
+      const a = group[idx]
+      const b = group[swapIdx]
+
       setQueues((prev) => {
-        const entry = prev.find((q) => q.id === entryId)
-        if (!entry) return prev
-        const group = prev
-          .filter((q) => q.serviceId === entry.serviceId)
-          .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.joinedAt - b.joinedAt)
-        const idx = group.findIndex((q) => q.id === entryId)
-        const swapIdx = direction === "up" ? idx - 1 : idx + 1
-        if (swapIdx < 0 || swapIdx >= group.length) return prev
-        const a = group[idx]
-        const b = group[swapIdx]
         return prev.map((q) => {
           if (q.id === a.id) return { ...q, joinedAt: b.joinedAt, priority: b.priority }
           if (q.id === b.id) return { ...q, joinedAt: a.joinedAt, priority: a.priority }
           return q
         })
       })
+
+      try {
+        await apiFetch(`/queue/${serviceId}/move/${entryId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ direction })
+        })
+      } catch (err) {
+        console.error("Failed to move entry via backend:", err)
+      }
     },
-    [],
+    [queues, apiFetch],
   )
 
   const markNotificationsRead = useCallback(() => {
     setNotifications((prev) => {
       const unreadIds = prev.filter((n) => !n.read).map((n) => n.id)
       unreadIds.forEach((id) => {
+        if (typeof id === "string" && id.startsWith("n-")) return
         apiFetch(`/notifications/${id}/read`, { method: "PATCH" }).catch((err) =>
           console.error("Failed to mark notification read on backend:", err),
         )

@@ -5,12 +5,16 @@ import { StatusBadge } from "../../components/shared"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent } from "../../components/ui/card"
 
-const SIM_TICK_MS = 7000
 
 function formatCountdown(totalSeconds) {
   if (totalSeconds <= 0) return "Any moment now"
-  const m = Math.floor(totalSeconds / 60)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
   const s = totalSeconds % 60
+  
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+  }
   return `${m}:${String(s).padStart(2, "0")}`
 }
 
@@ -86,20 +90,6 @@ export function QueueStatus({ onNavigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryId])
 
-  // Simulate the line moving: every few seconds "serve" whoever is at the front of the line
-  useEffect(() => {
-    if (!isWaiting) return undefined
-    const timer = setInterval(() => {
-      const { active: current, orderedQueue: getOrdered, removeEntry: remove } = latestRef.current
-      if (!current || current.position <= 1) return
-      const ahead = getOrdered(current.service.id)[0]
-      if (ahead && ahead.id !== current.entry.id) {
-        remove(ahead.id)
-      }
-    }, SIM_TICK_MS)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryId, isWaiting])
 
   // Fire a single "you're up next" notification the moment the user reaches the front
   useEffect(() => {

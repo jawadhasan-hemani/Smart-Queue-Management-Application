@@ -80,3 +80,26 @@
 .animate-toast {
   animation: slideDown 0.3s ease-out forwards;
 }
+
+/* ── Polished UI micro-animations ── */
+
+/* Fade-in-up for page sections */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+/* Cards that stagger in */
+.animate-card {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+/* Delay helpers for staggering children */
+.delay-1 { animation-delay: 50ms; }
+.delay-2 { animation-delay: 100ms; }
+.delay-3 { animation-delay: 150ms; }
+.delay-4 { animation-delay: 200ms; }
