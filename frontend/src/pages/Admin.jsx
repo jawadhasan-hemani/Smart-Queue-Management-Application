@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,UserPlus,X,XCircle,}
+import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,Download,FileText,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,UserPlus,X,XCircle,}
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -15,6 +15,7 @@ const nav = [
   { key: "services", label: "Services", icon: Settings2 },
   { key: "queues", label: "Queues", icon: Users },
   { key: "history", label: "History", icon: HistoryIcon },
+  { key: "reports", label: "Reports", icon: FileText },
   { key: "users", label: "User Management", icon: UserPlus },
 ]
 
@@ -23,6 +24,7 @@ const meta = {
   services: { title: "Service Management", subtitle: "Create and edit the services students can queue for" },
   queues: { title: "Queue Management", subtitle: "Pick a queue to reorder, remove, or serve students" },
   history: { title: "History", subtitle: "Every visit, served or left — filter by service and date" },
+  reports: { title: "Reports", subtitle: "Generate and download CSV reports for users, services, and queue stats" },
   users: { title: "User Management", subtitle: "Manage admin users and their access levels" },
 }
 
@@ -893,6 +895,138 @@ function AdminHistory({ log }) {
   )
 }
 
+const REPORT_TYPES = [
+  {
+    key: "users",
+    label: "Users & Queue Participation",
+    description: "One row per completed visit — who joined, which service, priority, and outcome.",
+    supportsDateRange: true,
+    supportsServiceFilter: false,
+    supportsGroupByService: false,
+  },
+  {
+    key: "services",
+    label: "Service Details & Activity",
+    description: "One row per service — currently waiting, totals served/left/canceled, and average wait.",
+    supportsDateRange: true,
+    supportsServiceFilter: true,
+    supportsGroupByService: false,
+  },
+  {
+    key: "stats",
+    label: "Queue Usage Statistics",
+    description: "Overall totals and average wait time, or broken out per service.",
+    supportsDateRange: true,
+    supportsServiceFilter: false,
+    supportsGroupByService: true,
+  },
+]
+
+function ReportCard({ config, services }) {
+  const { downloadReport } = useApp()
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [serviceId, setServiceId] = useState("")
+  const [groupByService, setGroupByService] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  async function handleDownload() {
+    setLoading(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      await downloadReport(config.key, {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        serviceId: config.supportsServiceFilter && serviceId ? serviceId : undefined,
+        groupByService: config.supportsGroupByService ? groupByService : undefined,
+      })
+      setSuccess(true)
+    } catch (err) {
+      setError(err.message || "Failed to generate report.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-6">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <FileText className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-medium text-foreground">{config.label}</h3>
+            <p className="text-sm text-muted-foreground">{config.description}</p>
+          </div>
+        </div>
+
+        {config.supportsDateRange && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
+              <DatePicker value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Any" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
+              <DatePicker value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Any" />
+            </div>
+          </div>
+        )}
+
+        {config.supportsServiceFilter && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Service</label>
+            <Select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+              <option value="">All services</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        {config.supportsGroupByService && (
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={groupByService}
+              onChange={(e) => setGroupByService(e.target.checked)}
+              className="size-4 rounded border-border"
+            />
+            Break down by service
+          </label>
+        )}
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        {success && !error && <p className="text-sm text-green-600">Report downloaded.</p>}
+
+        <Button onClick={handleDownload} disabled={loading} className="w-full justify-center">
+          <Download className="size-4" />
+          {loading ? "Generating..." : "Download CSV"}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReportsPanel() {
+  const { services } = useApp()
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="grid gap-4 md:grid-cols-1">
+        {REPORT_TYPES.map((config) => (
+          <ReportCard key={config.key} config={config} services={services} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function UserManagement() {
   const { admins, addAdmin, removeAdmin } = useApp()
   const [newEmail, setNewEmail] = useState("")
@@ -1051,6 +1185,7 @@ function Admin() {
         />
       )}
       {view === "history" && <AdminHistory log={resolvedLog} />}
+      {view === "reports" && <ReportsPanel />}
       {view === "users" && <UserManagement />}
     </AppShell>
   )

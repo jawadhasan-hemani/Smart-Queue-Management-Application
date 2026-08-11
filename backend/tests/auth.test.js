@@ -49,23 +49,22 @@ describe('Authentication Module API', () => {
       email: 'test@example.com'
     });
 
-    // Mock DB: findUserByFirebaseUid returns null (middleware lookup)
-    // Then insertUserCredentials returns the new user
-    // Then insertUserProfile returns a profile
+    // Mock DB. Four query() calls happen for a first-time sync:
+    //   1. middleware: findUserByFirebaseUid — no user found yet
+    //   2. middleware: auto-creates via insertUserCredentials (first-time login)
+    //   3. controller: insertUserCredentials again (its own explicit upsert)
+    //   4. controller: insertUserProfile
+    const syncedUserRow = {
+      id: 'uuid-1',
+      firebase_uid: 'user123',
+      email: 'test@example.com',
+      role: 'user',
+      created_at: new Date().toISOString(),
+    };
     db.query
-      // middleware lookup — no user found yet
       .mockResolvedValueOnce({ rows: [] })
-      // insertUserCredentials (includes bcrypt hash internally, but query mock)
-      .mockResolvedValueOnce({
-        rows: [{
-          id: 'uuid-1',
-          firebase_uid: 'user123',
-          email: 'test@example.com',
-          role: 'user',
-          created_at: new Date().toISOString(),
-        }]
-      })
-      // insertUserProfile
+      .mockResolvedValueOnce({ rows: [syncedUserRow] })
+      .mockResolvedValueOnce({ rows: [syncedUserRow] })
       .mockResolvedValueOnce({
         rows: [{
           id: 'profile-1',
@@ -93,21 +92,20 @@ describe('Authentication Module API', () => {
       email: 'admin@example.com'
     });
 
-    // Mock DB
+    // Same four-call sequence as the "sync user successfully" test above:
+    // middleware lookup (miss), middleware auto-create, controller upsert,
+    // controller insertUserProfile.
+    const syncedAdminRow = {
+      id: 'uuid-admin',
+      firebase_uid: 'admin123',
+      email: 'admin@example.com',
+      role: 'admin',
+      created_at: new Date().toISOString(),
+    };
     db.query
-      // middleware lookup — no user found yet
       .mockResolvedValueOnce({ rows: [] })
-      // insertUserCredentials
-      .mockResolvedValueOnce({
-        rows: [{
-          id: 'uuid-admin',
-          firebase_uid: 'admin123',
-          email: 'admin@example.com',
-          role: 'admin',
-          created_at: new Date().toISOString(),
-        }]
-      })
-      // insertUserProfile
+      .mockResolvedValueOnce({ rows: [syncedAdminRow] })
+      .mockResolvedValueOnce({ rows: [syncedAdminRow] })
       .mockResolvedValueOnce({
         rows: [{
           id: 'profile-admin',

@@ -20,3 +20,4 @@ patch.js
  
 coverage/
 backend/scripts/
+*.csv

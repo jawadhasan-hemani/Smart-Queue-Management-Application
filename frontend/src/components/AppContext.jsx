@@ -657,6 +657,44 @@ export function AppProvider({ children }) {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
   }, [])
 
+  // --- Admin reports download ---
+  // Unlike apiFetch, this doesn't parse JSON — the response is a CSV file,
+  // so we grab it as a blob and trigger a browser download directly.
+  const downloadReport = useCallback(async (type, { startDate, endDate, serviceId, groupByService } = {}) => {
+    const params = new URLSearchParams({ type })
+    if (startDate) params.set("startDate", startDate)
+    if (endDate) params.set("endDate", endDate)
+    if (serviceId) params.set("serviceId", serviceId)
+    if (groupByService) params.set("groupByService", "true")
+
+    const headers = {}
+    const currentUser = auth.currentUser
+    if (currentUser) {
+      const token = await currentUser.getIdToken()
+      headers["Authorization"] = `Bearer ${token}`
+    }
+
+    const res = await fetch(`${API_BASE}/admin/reports?${params.toString()}`, { headers })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw Object.assign(new Error(body.error || `API ${res.status}`), { status: res.status, body })
+    }
+
+    const blob = await res.blob()
+    const disposition = res.headers.get("Content-Disposition") || ""
+    const match = disposition.match(/filename="?([^"]+)"?/)
+    const filename = match ? match[1] : `${type}-report.csv`
+
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
@@ -690,6 +728,7 @@ export function AppProvider({ children }) {
       setMuteToasts,
       pushPermission,
       requestPushPermission,
+      downloadReport,
     }),
     [
       user,
@@ -723,6 +762,7 @@ export function AppProvider({ children }) {
       setMuteToasts,
       pushPermission,
       requestPushPermission,
+      downloadReport,
     ],
   )
 

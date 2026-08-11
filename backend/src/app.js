@@ -6,6 +6,7 @@ const queueRouter = require('./routes/queue');
 const notificationsRouter = require('./routes/notifications');
 const historyRouter = require('./routes/history');
 const chatRouter = require('./routes/chat');
+const reportsRouter = require('./routes/reports');
 
 const app = express();
 
@@ -26,6 +27,8 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/history', historyRouter);
 
 app.use('/api/chat', chatRouter);
+
+app.use('/api/admin/reports', reportsRouter);
 
 const authRoutes = require('../routes/auth');
 app.use('/api/auth', authRoutes);
