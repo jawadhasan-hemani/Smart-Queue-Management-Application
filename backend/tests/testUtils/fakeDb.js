@@ -333,6 +333,21 @@ function createFakeDb() {
       return { rows: [row] };
     }
 
+    if (text.startsWith('SELECT qe.position, s.name as service_name, s.duration as service_duration')) {
+      const entry = queueEntries.find(e => e.user_id === values[0] && e.status === 'waiting');
+      if (!entry) return { rows: [] };
+      const queue = queues.find(q => q.id === entry.queue_id);
+      const service = queue ? services.find(s => s.id === queue.service_id) : null;
+      if (!service) return { rows: [] };
+      return {
+        rows: [{
+          position: entry.position || 1,
+          service_name: service.name,
+          service_duration: service.duration
+        }]
+      };
+    }
+
     throw new Error(`fakeDb: unhandled query: ${text}`);
   }
 

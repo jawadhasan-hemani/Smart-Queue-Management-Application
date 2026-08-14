@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const chatQueries = require('../db/chatQueries');
 const serviceQueries = require('../db/serviceQueries');
+const queueQueries = require('../db/queueQueries');
 const { verifyFirebaseToken } = require('../../middleware/authMiddleware');
 const { GoogleGenAI } = require('@google/genai');
 
@@ -99,9 +100,22 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
 
     // 3. Fetch context for the AI (Services & current queues)
     const services = await serviceQueries.getAllServices();
-    const servicesContext = services.map(s => 
-      `- ${s.name}: ${s.description} (Duration: ${s.duration}m, ${s.open ? 'Open' : 'Closed'}, Priority: ${s.priority})`
-    ).join('\n');
+    const queueSummary = await queueQueries.getQueueSummary();
+    const queueCounts = {};
+    queueSummary.forEach(q => { queueCounts[q.serviceId] = q.count; });
+
+    const servicesContext = services.map(s => {
+      const waitCount = queueCounts[s.id] || 0;
+      const estWait = waitCount * s.duration;
+      return `- ${s.name}: ${s.description} (Duration: ${s.duration}m, ${s.open ? 'Open' : 'Closed'}, Priority: ${s.priority}, People Waiting: ${waitCount}, Estimated Wait: ${estWait}m)`;
+    }).join('\n');
+
+    const activeQueue = await queueQueries.getUserActiveQueueEntry(req.user.id);
+    let userContext = "The user is not currently in any queue.";
+    if (activeQueue) {
+      const waitTime = activeQueue.position * activeQueue.service_duration;
+      userContext = `The user is currently waiting in the queue for ${activeQueue.service_name}. They are position #${activeQueue.position} in line. The estimated wait time is ${waitTime} minutes.`;
+    }
 
     // 4. Construct System Prompt
     const systemPrompt = `You are CougarBot, the QueueSmart AI Assistant. QueueSmart is a university advising queue application.
@@ -110,6 +124,9 @@ DO NOT answer questions unrelated to advising, the university, or the QueueSmart
 
 Here are the current open services and their wait status:
 ${servicesContext}
+
+Here is the user's current status:
+${userContext}
 
 Keep your answers concise, helpful, and friendly. Do NOT use markdown formatting like ** or * in your responses. Use plain text only. For lists, use simple dashes or numbers.`;
 

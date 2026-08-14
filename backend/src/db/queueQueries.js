@@ -140,6 +140,19 @@ async function getQueueSummary() {
   }));
 }
 
+async function getUserActiveQueueEntry(userId) {
+  const result = await query(
+    `SELECT qe.position, s.name as service_name, s.duration as service_duration
+     FROM queue_entries qe
+     JOIN queues q ON qe.queue_id = q.id
+     JOIN services s ON q.service_id = s.id
+     WHERE qe.user_id = $1 AND qe.status = 'waiting'
+     LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
 module.exports = {
   getOrCreateQueue,
   getQueueByServiceId,
@@ -150,4 +163,5 @@ module.exports = {
   updateEntryPositions,
   getQueueSummary,
   swapQueueEntries,
+  getUserActiveQueueEntry,
 };
