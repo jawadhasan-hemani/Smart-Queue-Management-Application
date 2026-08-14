@@ -5,6 +5,7 @@ function createFakeDb() {
   let queues = [];
   let queueEntries = [];
   let chatMessages = [];
+  let chatSessions = [];
   let notifSeq = 0;
   let histSeq = 0;
   let svcSeq = 0;
@@ -255,24 +256,81 @@ function createFakeDb() {
       return { rows: list };
     }
 
+    // ── chat_sessions ──
+
+    if (text.startsWith('INSERT INTO chat_sessions')) {
+      const [userId, title] = values;
+      const now = new Date(Date.now() + chatSeq).toISOString();
+      const row = {
+        id: `sess${++chatSeq}`,
+        user_id: userId,
+        title,
+        created_at: now,
+        updated_at: now,
+      };
+      chatSessions.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.startsWith('SELECT s.*') && text.includes('FROM chat_sessions s')) {
+      const list = chatSessions
+        .filter((s) => s.user_id === values[0])
+        .map((s) => {
+          const firstUserMsg = chatMessages.find((m) => m.session_id === s.id && m.role === 'user');
+          return { ...s, preview: firstUserMsg ? firstUserMsg.content : null };
+        })
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      return { rows: list };
+    }
+
+    if (text.startsWith('SELECT * FROM chat_sessions WHERE id')) {
+      const row = chatSessions.find((s) => s.id === values[0]) || null;
+      return { rows: row ? [row] : [] };
+    }
+
+    if (text.startsWith('UPDATE chat_sessions SET title')) {
+      const row = chatSessions.find((s) => s.id === values[0]);
+      if (row) {
+        row.title = values[1];
+        row.updated_at = new Date().toISOString();
+      }
+      return { rows: row ? [row] : [] };
+    }
+
+    if (text.startsWith('UPDATE chat_sessions SET updated_at')) {
+      const row = chatSessions.find((s) => s.id === values[0]);
+      if (row) row.updated_at = new Date().toISOString();
+      return { rows: [] };
+    }
+
+    if (text.startsWith('DELETE FROM chat_sessions WHERE id')) {
+      const idx = chatSessions.findIndex((s) => s.id === values[0]);
+      if (idx === -1) return { rows: [] };
+      const [removed] = chatSessions.splice(idx, 1);
+      return { rows: [removed] };
+    }
+
+    // ── chat_messages ──
+
+    if (text.startsWith('SELECT * FROM chat_messages WHERE session_id')) {
+      const list = chatMessages
+        .filter((c) => c.session_id === values[0])
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      return { rows: list };
+    }
+
     if (text.startsWith('INSERT INTO chat_messages')) {
-      const [userId, role, content] = values;
+      const [userId, sessionId, role, content] = values;
       const row = {
         id: `chat${++chatSeq}`,
         user_id: userId,
+        session_id: sessionId,
         role,
         content,
         created_at: new Date(Date.now() + chatSeq).toISOString(),
       };
       chatMessages.push(row);
       return { rows: [row] };
-    }
-
-    if (text.startsWith('SELECT * FROM chat_messages WHERE user_id')) {
-      const list = chatMessages
-        .filter((c) => c.user_id === values[0])
-        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-      return { rows: list };
     }
 
     throw new Error(`fakeDb: unhandled query: ${text}`);
@@ -285,6 +343,7 @@ function createFakeDb() {
     queues = [];
     queueEntries = [];
     chatMessages = [];
+    chatSessions = [];
     notifSeq = 0;
     histSeq = 0;
     svcSeq = 0;
