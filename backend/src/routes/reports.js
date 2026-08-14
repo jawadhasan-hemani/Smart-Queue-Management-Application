@@ -20,10 +20,10 @@ function isValidDate(value) {
 }
 
 /**
- * GET /api/admin/reports?type=users|services|stats&format=csv
+ * GET /api/admin/reports?type=users|services|stats&format=csv|pdf
  * Optional: startDate, endDate (YYYY-MM-DD), serviceId (services only),
  * groupByService (stats only, 'true'/'false').
- * Admin-gated. Streams a CSV file back as an attachment.
+ * Admin-gated. Streams a CSV or PDF file back as an attachment.
  */
 router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
   const {
@@ -41,8 +41,8 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
     });
   }
 
-  if (format !== 'csv') {
-    return res.status(400).json({ error: "Only format=csv is supported right now." });
+  if (format !== 'csv' && format !== 'pdf') {
+    return res.status(400).json({ error: "format must be 'csv' or 'pdf'." });
   }
 
   if (!isValidDate(startDate) || !isValidDate(endDate)) {
@@ -50,24 +50,37 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
   }
 
   try {
-    let csv;
+    const grouped = groupByService === 'true';
+    let rows;
 
     if (type === 'users') {
-      const rows = await reportQueries.getUsersReport({ startDate, endDate });
-      csv = reportService.generateUsersCsv(rows);
+      rows = await reportQueries.getUsersReport({ startDate, endDate });
     } else if (type === 'services') {
-      const rows = await reportQueries.getServicesReport({ startDate, endDate, serviceId });
-      csv = reportService.generateServicesCsv(rows);
+      rows = await reportQueries.getServicesReport({ startDate, endDate, serviceId });
     } else {
-      const grouped = groupByService === 'true';
-      const rows = await reportQueries.getQueueStats({ startDate, endDate, groupByService: grouped });
-      csv = reportService.generateQueueStatsCsv(rows, grouped);
+      rows = await reportQueries.getQueueStats({ startDate, endDate, groupByService: grouped });
     }
 
-    const filename = `${reportService.getReportFilename(type)}.csv`;
+    const filename = `${reportService.getReportFilename(type)}.${format}`;
     res.status(200);
-    res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      let doc;
+      if (type === 'users') doc = reportService.generateUsersPdf(rows);
+      else if (type === 'services') doc = reportService.generateServicesPdf(rows);
+      else doc = reportService.generateQueueStatsPdf(rows, grouped);
+      doc.pipe(res);
+      return;
+    }
+
+    let csv;
+    if (type === 'users') csv = reportService.generateUsersCsv(rows);
+    else if (type === 'services') csv = reportService.generateServicesCsv(rows);
+    else csv = reportService.generateQueueStatsCsv(rows, grouped);
+
+    res.setHeader('Content-Type', 'text/csv');
     res.send(csv);
   } catch (err) {
     console.error(err);
@@ -75,4 +88,4 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;q

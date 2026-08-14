@@ -1,4 +1,5 @@
 const { createObjectCsvStringifier } = require('csv-writer');
+const PDFDocument = require('pdfkit');
 
 // Column definitions per report type: { id: <row key>, title: <CSV header> }.
 // Keep these in sync with the SELECT aliases in reportQueries.js.
@@ -86,6 +87,81 @@ function generateQueueStatsCsv(rows, grouped = false) {
   return rowsToCsv(asArray, columns);
 }
 
+const TITLES = {
+  users: 'QueueSmart - Users & Queue History Report',
+  services: 'QueueSmart - Services & Queue Activity Report',
+  stats: 'QueueSmart - Queue Usage Statistics Report',
+};
+
+/**
+ * Build a simple tabular PDF (title + header row + data rows) as a
+ * PDFDocument. Callers pipe this straight to the HTTP response.
+ * Kept intentionally basic (no pagination-aware column widths) since
+ * this only needs to satisfy the "at least one export format" report
+ * requirement, not be a polished print layout.
+ */
+function generatePdf(rows, columns, type, grouped) {
+  const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+  const data = Array.isArray(rows) ? rows : [rows];
+
+  doc.fontSize(16).text(TITLES[type] || 'QueueSmart Report', { align: 'center' });
+  doc.moveDown(0.3);
+  doc.fontSize(9).fillColor('gray')
+    .text(`Generated ${new Date().toLocaleString()}`, { align: 'center' });
+  doc.fillColor('black');
+  doc.moveDown(1);
+
+  const startX = doc.page.margins.left;
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const colWidth = usableWidth / columns.length;
+  const rowHeight = 20;
+  let y = doc.y;
+
+  function drawRow(values, isHeader) {
+    if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      y = doc.page.margins.top;
+    }
+    doc.fontSize(8).font(isHeader ? 'Helvetica-Bold' : 'Helvetica');
+    values.forEach((val, i) => {
+      doc.text(String(val ?? ''), startX + i * colWidth, y, {
+        width: colWidth - 4,
+        ellipsis: true,
+      });
+    });
+    y += rowHeight;
+  }
+
+  drawRow(columns.map((c) => c.title), true);
+  doc.moveTo(startX, y).lineTo(startX + usableWidth, y).strokeColor('gray').stroke();
+  y += 2;
+
+  if (data.length === 0) {
+    doc.fontSize(9).text('No data for the selected filters.', startX, y);
+  } else {
+    data.forEach((row) => drawRow(columns.map((c) => row[c.id]), false));
+  }
+
+  doc.end();
+  return doc;
+}
+
+/** PDF version of the users report. Returns a readable PDFDocument stream. */
+function generateUsersPdf(rows) {
+  return generatePdf(rows, COLUMNS.users, 'users');
+}
+
+/** PDF version of the services report. Returns a readable PDFDocument stream. */
+function generateServicesPdf(rows) {
+  return generatePdf(rows, COLUMNS.services, 'services');
+}
+
+/** PDF version of the queue stats report. Returns a readable PDFDocument stream. */
+function generateQueueStatsPdf(rows, grouped = false) {
+  const columns = grouped ? COLUMNS.stats : COLUMNS.statsOverall;
+  return generatePdf(rows, columns, 'stats', grouped);
+}
+
 /** Suggested download filename (no extension) for a given report type. */
 function getReportFilename(type) {
   const base = FILENAMES[type] || 'report';
@@ -98,6 +174,9 @@ module.exports = {
   generateUsersCsv,
   generateServicesCsv,
   generateQueueStatsCsv,
+  generateUsersPdf,
+  generateServicesPdf,
+  generateQueueStatsPdf,
   getReportFilename,
   COLUMNS,
 };

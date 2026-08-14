@@ -44,6 +44,18 @@ CREATE INDEX IF NOT EXISTS idx_queue_history_student_name ON queue_history (LOWE
 CREATE INDEX IF NOT EXISTS idx_queue_history_ended_at ON queue_history (ended_at DESC);
 CREATE INDEX IF NOT EXISTS idx_queue_history_service_id ON queue_history (service_id);
 
+-- Widen the status CHECK to include 'canceled' on a DB that already has
+-- the table from before this status existed (mirrors the notifications
+-- migration above).
+DO $$
+BEGIN
+  ALTER TABLE queue_history DROP CONSTRAINT queue_history_status_check;
+  ALTER TABLE queue_history ADD CONSTRAINT queue_history_status_check
+    CHECK (status IN ('served', 'left', 'canceled'));
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;
+
 DO $$
 BEGIN
   ALTER TABLE notifications ADD CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
