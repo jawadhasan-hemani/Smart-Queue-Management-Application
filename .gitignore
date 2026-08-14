@@ -19,5 +19,4 @@ test_output.log
 patch.js
  
 coverage/
-backend/scripts/
 *.csv
