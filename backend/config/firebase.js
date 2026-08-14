@@ -1,11 +1,17 @@
 const admin = require('firebase-admin');
 
-// We load the service account key from the config folder
+// We load the service account key from the config folder or environment variable
 let serviceAccount;
 try {
-  serviceAccount = require('./serviceAccountKey.json');
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Railway/Production: Read from Environment Variable
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // Local Development: Read from file
+    serviceAccount = require('./serviceAccountKey.json');
+  }
 } catch (err) {
-  console.warn('serviceAccountKey.json not found, using default initialization (might fail token verification without credentials)');
+  console.warn('Firebase credentials not found, using default initialization (might fail token verification without credentials)', err.message);
 }
 
 let isInitialized = false;
