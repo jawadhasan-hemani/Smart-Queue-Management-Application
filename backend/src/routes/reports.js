@@ -44,6 +44,9 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
   if (format !== 'csv' && format !== 'pdf') {
     return res.status(400).json({ error: "format must be 'csv' or 'pdf'." });
   }
+  if (type === 'stats' && format === 'pdf') {
+    return res.status(400).json({ error: "PDF export isn't available for stats reports yet — use format=csv." });
+  }
 
   if (!isValidDate(startDate) || !isValidDate(endDate)) {
     return res.status(400).json({ error: 'startDate/endDate must be in YYYY-MM-DD format.' });
@@ -88,4 +91,4 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
   }
 });
 
-module.exports = router;q
+module.exports = router;
