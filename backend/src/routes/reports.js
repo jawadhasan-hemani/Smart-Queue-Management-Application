@@ -64,7 +64,7 @@ router.get('/', verifyFirebaseToken, authorize('admin'), async (req, res) => {
       rows = await reportQueries.getQueueStats({ startDate, endDate, groupByService: grouped });
     }
 
-    const filename = `${reportService.getReportFilename(type)}.${format}`;
+    const filename = `${reportService.getReportFilename(type, req.query)}.${format}`;
     res.status(200);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 

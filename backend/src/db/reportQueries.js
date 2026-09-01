@@ -12,11 +12,11 @@ async function getUsersReport({ startDate, endDate } = {}) {
 
   if (startDate) {
     params.push(startDate);
-    conditions.push(`qh.ended_at >= $${params.length}`);
+    conditions.push(`qh.ended_at AT TIME ZONE 'America/Chicago' >= $${params.length}::timestamp`);
   }
   if (endDate) {
-    params.push(endDate);
-    conditions.push(`qh.ended_at <= $${params.length}`);
+    params.push(`${endDate} 23:59:59`);
+    conditions.push(`qh.ended_at AT TIME ZONE 'America/Chicago' <= $${params.length}::timestamp`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -48,16 +48,18 @@ async function getUsersReport({ startDate, endDate } = {}) {
  */
 async function getServicesReport({ startDate, endDate, serviceId } = {}) {
   const params = [];
-  const historyConditions = ['qh.service_id = s.id::text'];
+  const historyConditions = [];
 
   if (startDate) {
     params.push(startDate);
-    historyConditions.push(`qh.ended_at >= $${params.length}`);
+    historyConditions.push(`qh.ended_at AT TIME ZONE 'America/Chicago' >= $${params.length}::timestamp`);
   }
   if (endDate) {
-    params.push(endDate);
-    historyConditions.push(`qh.ended_at <= $${params.length}`);
+    params.push(`${endDate} 23:59:59`);
+    historyConditions.push(`qh.ended_at AT TIME ZONE 'America/Chicago' <= $${params.length}::timestamp`);
   }
+
+  const histWhere = historyConditions.length > 0 ? `WHERE ${historyConditions.join(' AND ')}` : '';
 
   let serviceFilter = '';
   if (serviceId) {
@@ -94,7 +96,7 @@ async function getServicesReport({ startDate, endDate, serviceId } = {}) {
         COUNT(*) FILTER (WHERE qh.status = 'canceled')::int AS canceled_count,
         COALESCE(ROUND(AVG(qh.waited_minutes)), 0)::int     AS avg_wait
       FROM queue_history qh
-      WHERE ${historyConditions.join(' AND ')}
+      ${histWhere}
       GROUP BY qh.service_id
     ) hist ON hist.service_id = s.id::text
     ${serviceFilter}
@@ -115,11 +117,11 @@ async function getQueueStats({ startDate, endDate, groupByService = false } = {}
 
   if (startDate) {
     params.push(startDate);
-    conditions.push(`ended_at >= $${params.length}`);
+    conditions.push(`ended_at AT TIME ZONE 'America/Chicago' >= $${params.length}::timestamp`);
   }
   if (endDate) {
-    params.push(endDate);
-    conditions.push(`ended_at <= $${params.length}`);
+    params.push(`${endDate} 23:59:59`);
+    conditions.push(`ended_at AT TIME ZONE 'America/Chicago' <= $${params.length}::timestamp`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 

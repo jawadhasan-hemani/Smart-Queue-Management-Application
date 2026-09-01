@@ -60,7 +60,9 @@ router.get('/:serviceId', async (req, res) => {
   }
 });
 
-router.post('/:serviceId/join', async (req, res) => {
+const { verifyFirebaseToken } = require('../../middleware/authMiddleware');
+
+router.post('/:serviceId/join', verifyFirebaseToken, async (req, res) => {
   try {
     const service = await serviceQueries.getServiceById(req.params.serviceId);
     if (!service) {
@@ -85,9 +87,9 @@ router.post('/:serviceId/join', async (req, res) => {
 
     const entry = await queueQueries.addQueueEntry(
       queue.id,
-      req.body.userId || null,
+      req.user.id || req.body.userId || null,
       req.body.studentName.trim(),
-      req.body.priority || 'medium',
+      req.body.priority || service.priority || 'medium',
     );
 
     await notifyJoin({
@@ -164,12 +166,13 @@ router.delete('/:serviceId/leave/:entryId', async (req, res) => {
 
     try {
       await recordHistory({
+        userId: removed.user_id,
         studentName: removed.student_name,
         serviceId: req.params.serviceId,
         serviceName: service ? service.name : 'Unknown',
         priority: removed.priority,
         joinedAt: new Date(removed.joined_at).getTime(),
-        status: 'left',
+        status: req.query.byAdmin === 'true' ? 'removed' : 'left',
       });
     } catch (err) {
       if (err.code === 'DUPLICATE_HISTORY_ENTRY') {
@@ -210,6 +213,7 @@ router.post('/:serviceId/serve', async (req, res) => {
 
     try {
       await recordHistory({
+        userId: served.user_id,
         studentName: served.student_name,
         serviceId: service.id,
         serviceName: service.name,

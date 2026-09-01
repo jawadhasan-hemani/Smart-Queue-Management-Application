@@ -29,6 +29,22 @@ async function addNotification({ studentName, serviceId, serviceName, type, mess
 }
 
 async function notifyJoin({ studentName, serviceId, serviceName, position }) {
+  const { query } = require('../../config/db');
+  try {
+    const result = await query("SELECT email FROM user_credentials WHERE role = 'admin'");
+    for (const admin of result.rows) {
+      await addNotification({
+        studentName: `Admin-${admin.email}`,
+        serviceId,
+        serviceName,
+        type: 'admin_joined',
+        message: `${studentName} joined the queue for ${serviceName}.`,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to notify admins:", err);
+  }
+
   return addNotification({
     studentName,
     serviceId,

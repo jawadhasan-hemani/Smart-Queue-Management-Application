@@ -60,10 +60,31 @@ const FILENAMES = {
  * column definitions. Returns just the header row (no crash) when rows is
  * empty, so an empty report still downloads a valid, openable CSV.
  */
+function formatExportValue(val) {
+  if (val instanceof Date) {
+    return val.toLocaleString('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+  return val;
+}
+
 function rowsToCsv(rows, columns) {
+  const formattedRows = (rows || []).map((row) => {
+    const newRow = {};
+    for (const key in row) {
+      newRow[key] = formatExportValue(row[key]);
+    }
+    return newRow;
+  });
   const stringifier = createObjectCsvStringifier({ header: columns });
   const header = stringifier.getHeaderString();
-  const body = stringifier.stringifyRecords(rows || []);
+  const body = stringifier.stringifyRecords(formattedRows);
   return header + body;
 }
 
@@ -104,28 +125,53 @@ function generatePdf(rows, columns, type, grouped) {
   const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
   const data = Array.isArray(rows) ? rows : [rows];
 
-  doc.fontSize(16).text(TITLES[type] || 'QueueSmart Report', { align: 'center' });
-  doc.moveDown(0.3);
-  doc.fontSize(9).fillColor('gray')
+  doc.fontSize(20).font('Helvetica-Bold').fillColor('#0f172a').text(TITLES[type] || 'QueueSmart Report', { align: 'center' });
+  doc.moveDown(0.2);
+  doc.fontSize(10).font('Helvetica').fillColor('#64748b')
     .text(`Generated ${new Date().toLocaleString()}`, { align: 'center' });
-  doc.fillColor('black');
-  doc.moveDown(1);
+  doc.moveDown(1.5);
 
   const startX = doc.page.margins.left;
   const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const colWidth = usableWidth / columns.length;
-  const rowHeight = 20;
+  const rowHeight = 24;
   let y = doc.y;
 
-  function drawRow(values, isHeader) {
+  function checkPageBreak() {
     if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
       doc.addPage();
       y = doc.page.margins.top;
+      return true;
     }
-    doc.fontSize(8).font(isHeader ? 'Helvetica-Bold' : 'Helvetica');
+    return false;
+  }
+
+  function drawRow(values, isHeader, rowIndex = 0) {
+    checkPageBreak();
+
+    // Background
+    if (isHeader) {
+      doc.rect(startX, y, usableWidth, rowHeight).fill('#1e293b');
+    } else if (rowIndex % 2 === 0) {
+      doc.rect(startX, y, usableWidth, rowHeight).fill('#f8fafc');
+    }
+
+    doc.fontSize(9).font(isHeader ? 'Helvetica-Bold' : 'Helvetica');
+    const textColor = isHeader ? '#ffffff' : '#334155';
+    
     values.forEach((val, i) => {
-      doc.text(String(val ?? ''), startX + i * colWidth, y, {
-        width: colWidth - 4,
+      let text = '';
+      if (val instanceof Date) {
+        text = val.toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } else {
+        text = String(val ?? '');
+        if (text === 'true') text = 'Yes';
+        if (text === 'false') text = 'No';
+      }
+      
+      doc.fillColor(textColor).text(text, startX + i * colWidth + 5, y + 7, {
+        width: colWidth - 10,
+        lineBreak: false,
         ellipsis: true,
       });
     });
@@ -133,13 +179,12 @@ function generatePdf(rows, columns, type, grouped) {
   }
 
   drawRow(columns.map((c) => c.title), true);
-  doc.moveTo(startX, y).lineTo(startX + usableWidth, y).strokeColor('gray').stroke();
-  y += 2;
 
   if (data.length === 0) {
-    doc.fontSize(9).text('No data for the selected filters.', startX, y);
+    y += 10;
+    doc.fontSize(10).fillColor('#64748b').text('No data for the selected filters.', startX, y, { align: 'center', width: usableWidth });
   } else {
-    data.forEach((row) => drawRow(columns.map((c) => row[c.id]), false));
+    data.forEach((row, rowIndex) => drawRow(columns.map((c) => row[c.id]), false, rowIndex));
   }
 
   doc.end();
@@ -163,10 +208,24 @@ function generateQueueStatsPdf(rows, grouped = false) {
 }
 
 /** Suggested download filename (no extension) for a given report type. */
-function getReportFilename(type) {
+function getReportFilename(type, query = {}) {
   const base = FILENAMES[type] || 'report';
-  const date = new Date().toISOString().slice(0, 10);
-  return `${base}-${date}`;
+  if (query.startDate && query.endDate && query.startDate === query.endDate) {
+    return `${base}-${query.startDate}`;
+  } else if (query.startDate && query.endDate) {
+    return `${base}-${query.startDate}-to-${query.endDate}`;
+  } else if (query.startDate) {
+    return `${base}-from-${query.startDate}`;
+  } else if (query.endDate) {
+    return `${base}-until-${query.endDate}`;
+  }
+
+  // Fallback to local server date to prevent late-night timezone drift
+  const dateObj = new Date();
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${base}-${year}-${month}-${day}`;
 }
 
 module.exports = {

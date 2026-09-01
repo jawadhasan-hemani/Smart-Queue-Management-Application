@@ -1,11 +1,6 @@
 const { query } = require('../../config/db');
 
-const PRIORITY_CASE = `CASE priority
-  WHEN 'high' THEN 0
-  WHEN 'medium' THEN 1
-  WHEN 'low' THEN 2
-  ELSE 3
-END`;
+
 
 async function getOrCreateQueue(serviceId) {
   const existing = await query(
@@ -32,11 +27,11 @@ async function getQueueByServiceId(serviceId) {
 async function getQueueEntries(queueId) {
   const result = await query(
     `SELECT *, ROW_NUMBER() OVER (
-        ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC
+        ORDER BY priority DESC, sort_time ASC, id ASC
       ) AS position
      FROM queue_entries
      WHERE queue_id = $1 AND status = 'waiting'
-     ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC`,
+     ORDER BY sort_time ASC, id ASC`,
     [queueId],
   );
   return result.rows;
@@ -44,8 +39,8 @@ async function getQueueEntries(queueId) {
 
 async function addQueueEntry(queueId, userId, studentName, priority = 'medium') {
   const result = await query(
-    `INSERT INTO queue_entries (queue_id, user_id, student_name, priority, position, status)
-     VALUES ($1, $2, $3, $4, 0, 'waiting')
+    `INSERT INTO queue_entries (queue_id, user_id, student_name, priority, position, status, sort_time)
+     VALUES ($1, $2, $3, $4, 0, 'waiting', NOW())
      RETURNING *`,
     [queueId, userId, studentName, priority],
   );
@@ -69,7 +64,7 @@ async function serveNextEntry(queueId) {
   const next = await query(
     `SELECT * FROM queue_entries
      WHERE queue_id = $1 AND status = 'waiting'
-     ORDER BY ${PRIORITY_CASE}, joined_at ASC
+     ORDER BY sort_time ASC
      LIMIT 1`,
     [queueId],
   );
@@ -92,7 +87,7 @@ async function updateEntryPositions(queueId) {
     `UPDATE queue_entries e
      SET position = sub.pos
      FROM (
-       SELECT id, ROW_NUMBER() OVER (ORDER BY ${PRIORITY_CASE}, joined_at ASC, id ASC) as pos
+       SELECT id, ROW_NUMBER() OVER (ORDER BY priority DESC, sort_time ASC, id ASC) as pos
        FROM queue_entries
        WHERE queue_id = $1 AND status = 'waiting'
      ) sub
@@ -102,22 +97,23 @@ async function updateEntryPositions(queueId) {
 }
 
 async function swapQueueEntries(entryIdA, entryIdB) {
-  const resultA = await query('SELECT joined_at, priority, queue_id FROM queue_entries WHERE id = $1', [entryIdA]);
-  const resultB = await query('SELECT joined_at, priority FROM queue_entries WHERE id = $1', [entryIdB]);
+  const resultA = await query('SELECT sort_time, priority, queue_id FROM queue_entries WHERE id = $1', [entryIdA]);
+  const resultB = await query('SELECT sort_time, priority FROM queue_entries WHERE id = $1', [entryIdB]);
   
   if (!resultA.rows[0] || !resultB.rows[0]) return false;
+  
   const a = resultA.rows[0];
   const b = resultB.rows[0];
-  
+
   await query(
-    'UPDATE queue_entries SET joined_at = $1, priority = $2 WHERE id = $3',
-    [b.joined_at, b.priority, entryIdA]
+    'UPDATE queue_entries SET sort_time = $1, priority = $2 WHERE id = $3',
+    [b.sort_time || new Date(), b.priority, entryIdA]
   );
   await query(
-    'UPDATE queue_entries SET joined_at = $1, priority = $2 WHERE id = $3',
-    [a.joined_at, a.priority, entryIdB]
+    'UPDATE queue_entries SET sort_time = $1, priority = $2 WHERE id = $3',
+    [a.sort_time || new Date(), a.priority, entryIdB]
   );
-  
+
   await updateEntryPositions(a.queue_id);
   return true;
 }

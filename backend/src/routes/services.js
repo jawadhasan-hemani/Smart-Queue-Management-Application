@@ -90,4 +90,17 @@ router.put('/:id', verifyFirebaseToken, authorize('admin'), async (req, res) => 
   }
 });
 
+router.delete('/:id', verifyFirebaseToken, authorize('admin'), async (req, res) => {
+  try {
+    const deleted = await serviceQueries.deleteService(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Service not found.' });
+    }
+    res.status(200).json({ message: 'Service deleted.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,Download,FileText,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,UserPlus,X,XCircle,}
+import {ArrowDown,ArrowLeft,ArrowUp,Calendar as CalendarIcon,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Clock,Download,FileText,History as HistoryIcon,LayoutDashboard,LogOut,Pencil,PhoneCall,Plus,Search,Settings2,TriangleAlert,Users,UserPlus,X,XCircle,Trash2}
 from "lucide-react"
 import { AppShell } from "../components/shell/AppShell"
 import { useApp } from "../components/AppContext"
@@ -140,6 +140,148 @@ function DatePicker({ id, value, onChange, placeholder = "mm/dd/yyyy" }) {
                         ? "bg-muted font-semibold text-foreground"
                         : "text-foreground"
                   }`}
+                >
+                  {d.getDate()}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DateRangePicker({ id, startDate, endDate, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (startDate) {
+      const d = new Date(startDate + "T12:00:00")
+      if (!isNaN(d)) setCurrentMonth(d)
+    }
+  }, [startDate])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const year = currentMonth.getFullYear()
+  const month = currentMonth.getMonth()
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDay = new Date(year, month, 1).getDay()
+
+  const days = []
+  for (let i = 0; i < firstDay; i++) days.push(null)
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i))
+
+  function handleSelect(d) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    const dateStr = `${y}-${m}-${day}`
+    
+    if (!startDate || (startDate && endDate)) {
+      onChange({ start: dateStr, end: "" })
+    } else {
+      const dStart = new Date(startDate + "T12:00:00")
+      dStart.setHours(0, 0, 0, 0)
+      if (d < dStart) {
+        onChange({ start: dateStr, end: "" })
+      } else {
+        onChange({ start: startDate, end: dateStr })
+        setOpen(false)
+      }
+    }
+  }
+
+  const sDate = startDate ? new Date(startDate + "T12:00:00") : null
+  const eDate = endDate ? new Date(endDate + "T12:00:00") : null
+
+  const displayValue = sDate && eDate 
+    ? `${sDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${eDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+    : sDate
+      ? `${sDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - Select end...`
+      : ""
+
+  return (
+    <div className="relative w-full" ref={ref}>
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex w-full items-center justify-between rounded-xl border border-border bg-card py-2 pl-3 pr-3 text-sm transition-all hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring ${
+          startDate ? "text-foreground" : "text-muted-foreground"
+        }`}
+      >
+        <span className="truncate">{displayValue || "Any time"}</span>
+        <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 z-50 mt-1 w-full rounded-xl border border-border bg-card p-3 shadow-xl animate-in fade-in zoom-in-95">
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <div className="text-sm font-semibold text-foreground">
+              {currentMonth.toLocaleString("default", { month: "long" })} {year}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+          <div className="mb-1 grid grid-cols-7 gap-1 text-center">
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+              <div key={d} className="text-[10px] font-medium uppercase text-muted-foreground">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((d, i) => {
+              if (!d) return <div key={`empty-${i}`} />
+              const isStart = sDate && d.toDateString() === sDate.toDateString()
+              const isEnd = eDate && d.toDateString() === eDate.toDateString()
+              const isBetween = sDate && eDate && d > sDate && d < eDate
+              const isToday = d.toDateString() === new Date().toDateString()
+              const isFuture = d > new Date()
+
+              let bgClass = "text-foreground hover:bg-muted hover:text-foreground"
+              if (isStart || isEnd) {
+                bgClass = "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+              } else if (isBetween) {
+                bgClass = "bg-[#e6f4f1] text-[#0d7a74] font-medium hover:bg-[#d1eae5]"
+              } else if (isToday) {
+                bgClass = "bg-muted font-semibold text-foreground hover:bg-muted"
+              }
+
+              if (isFuture) {
+                bgClass = "text-muted-foreground opacity-50 cursor-not-allowed"
+              }
+
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => !isFuture && handleSelect(d)}
+                  disabled={isFuture}
+                  className={`flex h-8 w-full items-center justify-center rounded-lg text-xs transition-colors mx-auto ${bgClass}`}
                 >
                   {d.getDate()}
                 </button>
@@ -454,7 +596,7 @@ function ServiceForm({ editing, onSaved, onCancelEdit }) {
 }
 
 function ServiceManagement({ editingId, onEdit, onSaved }) {
-  const { services } = useApp()
+  const { services, deleteService, toggleServiceOpen } = useApp()
   const editing = services.find((s) => s.id === editingId) || null
 
   return (
@@ -480,9 +622,27 @@ function ServiceManagement({ editingId, onEdit, onSaved }) {
                 <p className="mt-1 truncate text-sm text-muted-foreground">{s.description}</p>
                 <p className="mt-1 text-xs text-muted-foreground">~{s.duration} min per visit</p>
               </div>
-              <Button variant="outline" size="sm" className="h-9 shrink-0 rounded-md" onClick={() => onEdit(s.id)}>
-                <Pencil className="size-3.5" /> Edit
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={() => onEdit(s.id)}>
+                  <Pencil className="size-3.5" /> Edit
+                </Button>
+                <Button
+                  variant={s.open ? "destructive" : "default"}
+                  size="sm"
+                  className="h-9 rounded-md"
+                  onClick={() => toggleServiceOpen(s.id)}
+                >
+                  {s.open ? "Close" : "Open"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => deleteService(s.id)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -672,6 +832,7 @@ const OUTCOME_CONFIG = {
   served: { label: "Served", tone: "success", Icon: CheckCircle2 },
   left: { label: "Left queue", tone: "neutral", Icon: LogOut },
   removed: { label: "Removed by admin", tone: "danger", Icon: XCircle },
+  canceled: { label: "Canceled", tone: "danger", Icon: XCircle },
 }
 
 const DATE_PRESETS = [
@@ -682,7 +843,8 @@ const DATE_PRESETS = [
 
 function toDateInputValue(ts) {
   const d = new Date(ts)
-  return d.toISOString().slice(0, 10)
+  const pad = (n) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function AdminHistory({ log }) {
@@ -712,8 +874,8 @@ function AdminHistory({ log }) {
     return log.filter((entry) => {
       if (serviceFilter !== "all" && entry.serviceId !== serviceFilter) return false
       if (outcomeFilter !== "all" && entry.outcome !== outcomeFilter) return false
-      if (dateFrom && entry.resolvedAt < new Date(dateFrom).setHours(0, 0, 0, 0)) return false
-      if (dateTo && entry.resolvedAt > new Date(dateTo).setHours(23, 59, 59, 999)) return false
+      if (dateFrom && new Date(entry.resolvedAt).getTime() < new Date(dateFrom + "T00:00:00").setHours(0, 0, 0, 0)) return false
+      if (dateTo && new Date(entry.resolvedAt).getTime() > new Date(dateTo + "T00:00:00").setHours(23, 59, 59, 999)) return false
       return true
     })
   }, [log, serviceFilter, outcomeFilter, dateFrom, dateTo])
@@ -799,29 +961,17 @@ function AdminHistory({ log }) {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground" htmlFor="hist-from">
-                From
+              <label className="text-xs font-bold text-foreground" htmlFor="hist-date">
+                Date Range
               </label>
-              <DatePicker
-                id="hist-from"
-                value={dateFrom}
-                onChange={(e) => {
+              <DateRangePicker
+                id="hist-date"
+                startDate={dateFrom}
+                endDate={dateTo}
+                onChange={({ start, end }) => {
                   setPreset("custom")
-                  setDateFrom(e.target.value)
-                }}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-foreground" htmlFor="hist-to">
-                To
-              </label>
-              <DatePicker
-                id="hist-to"
-                value={dateTo}
-                onChange={(e) => {
-                  setPreset("custom")
-                  setDateTo(e.target.value)
+                  setDateFrom(start)
+                  setDateTo(end)
                 }}
               />
             </div>
@@ -857,7 +1007,8 @@ function AdminHistory({ log }) {
             </div>
           )}
           {filtered.map((entry) => {
-            const { label, tone, Icon } = OUTCOME_CONFIG[entry.outcome]
+            const config = OUTCOME_CONFIG[entry.outcome] || { label: "Unknown", tone: "neutral", Icon: XCircle }
+            const { label, tone, Icon } = config
             return (
               <div key={entry.id} className="flex items-center gap-4 p-4">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -942,6 +1093,7 @@ function ReportCard({ config, services }) {
         endDate: endDate || undefined,
         serviceId: config.supportsServiceFilter && serviceId ? serviceId : undefined,
         groupByService: config.supportsGroupByService ? groupByService : undefined,
+        format: "csv",
       })
       setSuccess(true)
     } catch (err) {
@@ -965,15 +1117,16 @@ function ReportCard({ config, services }) {
         </div>
 
         {config.supportsDateRange && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <DatePicker value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Any" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <DatePicker value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Any" />
-            </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
+            <DateRangePicker 
+              startDate={startDate} 
+              endDate={endDate} 
+              onChange={({ start, end }) => {
+                setStartDate(start)
+                setEndDate(end)
+              }} 
+            />
           </div>
         )}
 
@@ -1004,10 +1157,12 @@ function ReportCard({ config, services }) {
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && !error && <p className="text-sm text-green-600">Report downloaded.</p>}
 
-        <Button onClick={handleDownload} disabled={loading} className="w-full justify-center">
-          <Download className="size-4" />
-          {loading ? "Generating..." : "Download CSV"}
-        </Button>
+        <div className="mt-4">
+          <Button onClick={handleDownload} disabled={loading} className="w-full justify-center">
+            <Download className="size-4 mr-2" />
+            {loading ? "Generating..." : "Download Report"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

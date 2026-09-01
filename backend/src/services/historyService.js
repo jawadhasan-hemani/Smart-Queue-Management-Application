@@ -14,11 +14,12 @@ function mapHistoryEntry(row) {
   };
 }
 
-async function recordHistory({ studentName, serviceId, serviceName, priority, joinedAt, status }) {
+async function recordHistory({ userId, studentName, serviceId, serviceName, priority, joinedAt, status }) {
   const endedAt = Date.now();
   const waitedMinutes = Math.max(0, Math.round((endedAt - joinedAt) / 60_000));
 
   const row = await historyQueries.insertHistoryEntry({
+    userId,
     studentName,
     serviceId,
     serviceName,

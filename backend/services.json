@@ -1,0 +1,102 @@
+[
+  {
+    "id": "214d742f-befd-43a1-a2b2-dbc2145e0370",
+    "name": "Academic Advising",
+    "description": "Walk-in academic advising for course planning.",
+    "duration": 15,
+    "priority": "medium",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.493Z",
+    "updated_at": "2026-08-15T02:46:15.493Z"
+  },
+  {
+    "id": "8ceb260d-8a43-4d16-a9b3-1c69e572ea96",
+    "name": "Financial Aid",
+    "description": "Questions on FAFSA, grants, and loan disbursement.",
+    "duration": 20,
+    "priority": "high",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.548Z",
+    "updated_at": "2026-08-15T02:46:15.548Z"
+  },
+  {
+    "id": "506dff77-93a5-4ec5-949d-f017757c4dbe",
+    "name": "Registrar Services",
+    "description": "Transcripts, enrollment verification, and holds.",
+    "duration": 10,
+    "priority": "low",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.611Z",
+    "updated_at": "2026-08-15T02:46:15.611Z"
+  },
+  {
+    "id": "b73b6931-1338-44f4-92d0-804b90664512",
+    "name": "IT Help Desk",
+    "description": "Wi-Fi connectivity, password resets, and software installation.",
+    "duration": 15,
+    "priority": "medium",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.664Z",
+    "updated_at": "2026-08-15T02:46:15.664Z"
+  },
+  {
+    "id": "b6de26ff-d0e8-4098-ba58-e5086e6594be",
+    "name": "Housing & Residential Life",
+    "description": "Room assignments, maintenance requests, and move-in questions.",
+    "duration": 25,
+    "priority": "low",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.719Z",
+    "updated_at": "2026-08-15T02:46:15.719Z"
+  },
+  {
+    "id": "5154f793-407b-427f-a090-2c55f87715b5",
+    "name": "Student Health Center",
+    "description": "Vaccinations, physicals, and general medical inquiries.",
+    "duration": 30,
+    "priority": "high",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.781Z",
+    "updated_at": "2026-08-15T02:46:15.781Z"
+  },
+  {
+    "id": "fb157fd1-5420-458c-9abe-5f754b7bb354",
+    "name": "Career Services",
+    "description": "Resume reviews, interview prep, and career counseling.",
+    "duration": 45,
+    "priority": "medium",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.844Z",
+    "updated_at": "2026-08-15T02:46:15.844Z"
+  },
+  {
+    "id": "07e90340-0800-41b1-9f60-f774f67efe0c",
+    "name": "International Student Office",
+    "description": "Visa questions, OPT/CPT authorizations, and travel signatures.",
+    "duration": 20,
+    "priority": "high",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.916Z",
+    "updated_at": "2026-08-15T02:46:15.916Z"
+  },
+  {
+    "id": "2723297a-933c-4c48-848f-58e822b5a12f",
+    "name": "Veterans Affairs",
+    "description": "GI Bill certification, benefits advising, and support.",
+    "duration": 25,
+    "priority": "medium",
+    "open": true,
+    "created_at": "2026-08-15T02:46:15.979Z",
+    "updated_at": "2026-08-15T02:46:15.979Z"
+  },
+  {
+    "id": "47d9ce93-b18f-4903-a36f-9235e9013deb",
+    "name": "Bursar's Office",
+    "description": "Tuition payments, payment plans, and refunds.",
+    "duration": 15,
+    "priority": "high",
+    "open": true,
+    "created_at": "2026-08-15T02:46:16.041Z",
+    "updated_at": "2026-08-15T02:46:16.041Z"
+  }
+]

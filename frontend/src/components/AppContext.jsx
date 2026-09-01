@@ -155,6 +155,7 @@ export function AppProvider({ children }) {
     joined: { title: "Joined queue", tone: "success" },
     near_turn: { title: "Almost your turn", tone: "warning" },
     served: { title: "You've been served", tone: "success" },
+    admin_joined: { title: "New student joined", tone: "info" },
     custom: { title: "Notification", tone: "info" },
   }
 
@@ -200,6 +201,7 @@ export function AppProvider({ children }) {
                     studentName: entry.studentName || entry.student_name,
                     joinedAt: new Date(entry.joinedAt || entry.joined_at).getTime(),
                     priority: entry.priority || "medium",
+                    position: entry.position,
                   }))
                 )
                 .catch(() => [])
@@ -211,11 +213,12 @@ export function AppProvider({ children }) {
         }
 
         // Sync History and Notifications
-        const query = user?.name ? `?studentName=${encodeURIComponent(user.name)}` : ""
+        const histQuery = (user?.role !== "admin" && user?.name) ? `?studentName=${encodeURIComponent(user.name)}` : ""
+        const notifQuery = user?.role === "admin" ? `?studentName=Admin-${encodeURIComponent(user.email)}` : (user?.name ? `?studentName=${encodeURIComponent(user.name)}` : "")
         
         const [histData, notifData] = await Promise.all([
-          apiFetch(`/history${query}`).catch(() => null),
-          apiFetch(`/notifications${query}`).catch(() => null)
+          apiFetch(`/history${histQuery}`).catch(() => null),
+          apiFetch(`/notifications${notifQuery}`).catch(() => null)
         ])
         
         if (histData && histData.history && mounted) {
@@ -326,13 +329,23 @@ export function AppProvider({ children }) {
         throw err;
       }
     }
-    setAdmins(prev => [...prev, email])
-  }, [admins, setAdmins])
+    await apiFetch("/auth/admins", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    }).catch(err => console.error("Failed to sync admin to backend:", err))
 
-  const removeAdmin = useCallback((email) => {
+    setAdmins(prev => [...prev, email])
+  }, [admins, setAdmins, apiFetch])
+
+  const removeAdmin = useCallback(async (email) => {
     if (email === "admin@queuesmart.com") return // Protect master account
+    
+    await apiFetch(`/auth/admins/${encodeURIComponent(email)}`, {
+      method: "DELETE"
+    }).catch(err => console.error("Failed to remove admin from backend:", err))
+
     setAdmins(prev => prev.filter(e => e !== email))
-  }, [setAdmins])
+  }, [apiFetch, setAdmins])
 
   const saveService = useCallback(
     async (service) => {
@@ -412,11 +425,24 @@ export function AppProvider({ children }) {
     }
   }, [services, apiFetch])
 
+  const deleteService = useCallback(async (id) => {
+    // Optimistic UI update
+    setServices((prev) => prev.filter((s) => s.id !== id))
+    
+    try {
+      await apiFetch(`/services/${id}`, {
+        method: "DELETE",
+      })
+    } catch (err) {
+      console.error("Failed to delete service:", err)
+    }
+  }, [apiFetch])
+
   const orderedQueue = useCallback(
     (serviceId) =>
       queues
         .filter((q) => q.serviceId === serviceId)
-        .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.joinedAt - b.joinedAt),
+        .sort((a, b) => (a.position || 0) - (b.position || 0)),
     [queues],
   )
 
@@ -480,6 +506,7 @@ export function AppProvider({ children }) {
             studentName: user.name,
             joinedAt: Date.now(),
             priority: "medium",
+            position: 999, // Will be corrected by polling sync
           },
         ]
       })
@@ -494,7 +521,6 @@ export function AppProvider({ children }) {
           method: "POST",
           body: JSON.stringify({
             studentName: user.name,
-            priority: "medium",
           }),
         })
         if (data.entry) {
@@ -508,6 +534,7 @@ export function AppProvider({ children }) {
                     studentName: data.entry.studentName || data.entry.student_name,
                     joinedAt: (data.entry.joinedAt || data.entry.joined_at) ? new Date(data.entry.joinedAt || data.entry.joined_at).getTime() : Date.now(),
                     priority: data.entry.priority || "medium",
+                    position: data.entry.position,
                   }
                 : q
             )
@@ -515,6 +542,13 @@ export function AppProvider({ children }) {
         }
       } catch (err) {
         console.error("Failed to join queue via backend:", err)
+        // Revert optimistic update
+        setQueues((prev) => prev.filter((q) => q.id !== tempId))
+        pushNotification({
+          title: "Failed to join queue",
+          body: err.message || "An error occurred while joining the queue.",
+          tone: "danger",
+        })
       }
     },
     [user, services, pushNotification, apiFetch],
@@ -607,7 +641,7 @@ export function AppProvider({ children }) {
       const serviceId = entry.serviceId
       const group = queues
         .filter((q) => q.serviceId === serviceId)
-        .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.joinedAt - b.joinedAt)
+        .sort((a, b) => (a.position || 0) - (b.position || 0))
       
       const idx = group.findIndex((q) => q.id === entryId)
       const swapIdx = direction === "up" ? idx - 1 : idx + 1
@@ -618,8 +652,8 @@ export function AppProvider({ children }) {
 
       setQueues((prev) => {
         return prev.map((q) => {
-          if (q.id === a.id) return { ...q, joinedAt: b.joinedAt, priority: b.priority }
-          if (q.id === b.id) return { ...q, joinedAt: a.joinedAt, priority: a.priority }
+          if (q.id === a.id) return { ...q, position: b.position }
+          if (q.id === b.id) return { ...q, position: a.position }
           return q
         })
       })
@@ -660,8 +694,8 @@ export function AppProvider({ children }) {
   // --- Admin reports download ---
   // Unlike apiFetch, this doesn't parse JSON — the response is a CSV file,
   // so we grab it as a blob and trigger a browser download directly.
-  const downloadReport = useCallback(async (type, { startDate, endDate, serviceId, groupByService } = {}) => {
-    const params = new URLSearchParams({ type })
+  const downloadReport = useCallback(async (type, { startDate, endDate, serviceId, groupByService, format = "csv" } = {}) => {
+    const params = new URLSearchParams({ type, format })
     if (startDate) params.set("startDate", startDate)
     if (endDate) params.set("endDate", endDate)
     if (serviceId) params.set("serviceId", serviceId)
@@ -683,7 +717,7 @@ export function AppProvider({ children }) {
     const blob = await res.blob()
     const disposition = res.headers.get("Content-Disposition") || ""
     const match = disposition.match(/filename="?([^"]+)"?/)
-    const filename = match ? match[1] : `${type}-report.csv`
+    const filename = match ? match[1] : `${type}-report.${format}`
 
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -711,6 +745,7 @@ export function AppProvider({ children }) {
       addAdmin,
       removeAdmin,
       saveService,
+      deleteService,
       toggleServiceOpen,
       orderedQueue,
       myEntry,
@@ -745,6 +780,7 @@ export function AppProvider({ children }) {
       addAdmin,
       removeAdmin,
       saveService,
+      deleteService,
       toggleServiceOpen,
       orderedQueue,
       myEntry,
