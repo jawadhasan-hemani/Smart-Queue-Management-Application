@@ -33,6 +33,22 @@ It provides real-time visibility for users, intelligent wait-time estimations, a
 
 ---
 
+## 📸 Demo
+
+**AI Assistant**
+
+![AI Assistant Demo](docs/media/ai-assistant.gif)
+
+**Joining a Queue**
+
+![Join Queue Demo](docs/media/join-queue.gif)
+
+**History Log**
+
+![History Log](docs/media/history.png)
+
+---
+
 ## 🛠️ Tech Stack
 
 **Frontend:**
