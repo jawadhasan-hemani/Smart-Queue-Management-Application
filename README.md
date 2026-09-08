@@ -37,15 +37,15 @@ It provides real-time visibility for users, intelligent wait-time estimations, a
 
 **AI Assistant**
 
-![AI Assistant Demo](docs/media/ai-assistant.gif)
+![AI Assistant Demo](demo/ai-assistant.gif)
 
 **Joining a Queue**
 
-![Join Queue Demo](docs/media/join-queue.gif)
+![Join Queue Demo](demo/join-queue.gif)
 
 **History Log**
 
-![History Log](docs/media/history.png)
+![History Log](demo/history.png)
 
 ---
 
