@@ -209,17 +209,16 @@ export default function AIChatbot() {
         style={{ height: '500px', maxHeight: '80vh' }}
       >
         {/* Header */}
-        <div className="p-4 flex justify-between items-center shrink-0" style={{ background: '#1a3c4d' }}>
+        <div className="p-4 flex justify-between items-center shrink-0 bg-sidebar-primary">
           <div className="flex items-center gap-2">
             <Sparkles size={20} style={{ color: '#f0c040' }} />
-            <h3 className="font-semibold text-lg" style={{ color: '#ffffff' }}>CougarBot</h3>
+            <h3 className="font-semibold text-lg text-sidebar-primary-foreground">CougarBot</h3>
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={handleOpenHistory}
               title="Chat History"
-              className="p-1.5 rounded-full transition-colors"
-              style={{ color: '#cbd5e1' }}
+              className="p-1.5 rounded-full transition-colors text-sidebar-primary-foreground/70"
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
@@ -228,8 +227,7 @@ export default function AIChatbot() {
             <button
               onClick={handleNewChat}
               title="New Chat"
-              className="p-1.5 rounded-full transition-colors"
-              style={{ color: '#cbd5e1' }}
+              className="p-1.5 rounded-full transition-colors text-sidebar-primary-foreground/70"
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
@@ -237,8 +235,7 @@ export default function AIChatbot() {
             </button>
             <button
               onClick={() => { setIsOpen(false); setShowHistory(false); }}
-              className="p-1.5 rounded-full transition-colors"
-              style={{ color: '#cbd5e1' }}
+              className="p-1.5 rounded-full transition-colors text-sidebar-primary-foreground/70"
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
@@ -398,17 +395,16 @@ export default function AIChatbot() {
       <div className="relative flex flex-col items-end">
         {/* Tooltip badge */}
         {!isOpen && messages.length === 0 && !unreadResponse && (
-          <div className="mb-2 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg animate-bounce" style={{ background: '#1a3c4d' }}>
+          <div className="mb-2 text-sidebar-primary-foreground text-xs font-semibold px-3 py-1 rounded-full shadow-lg animate-bounce bg-sidebar-primary">
             Need help?
           </div>
         )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`relative p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center text-white
+          className={`relative p-4 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center text-sidebar-primary-foreground bg-sidebar-primary
             ${isOpen ? 'rotate-90 scale-90' : 'hover:scale-105'}
           `}
-          style={{ background: '#1a3c4d' }}
         >
           {isOpen ? <X size={28} className="-rotate-90" /> : <MessageCircle size={28} />}
 
@@ -416,7 +412,7 @@ export default function AIChatbot() {
           {!isOpen && unreadResponse && (
             <span className="absolute top-0 right-0 flex h-4 w-4">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-destructive border-2 border-solid" style={{ borderColor: '#1a3c4d' }}></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-destructive border-2 border-solid border-sidebar-primary"></span>
             </span>
           )}
         </button>
